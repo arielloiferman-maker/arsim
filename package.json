@@ -1,0 +1,14 @@
+{
+  "name": "beach-brawl",
+  "private": true,
+  "scripts": {
+    "build": "node build.cjs",
+    "start": "node server.cjs",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "three": "0.164.1",
+    "wrangler": "^4.0.0"
+  }
+}
