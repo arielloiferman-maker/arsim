@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import teamModel from './team-model.obj';
+import {loadCrew, attachCrew, animateCrew, crewFall} from './crew.js';
 import {buildResort, parasol, lounger, sportsBall} from './resort.js';
 import {makeOcean, waveHeight} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
@@ -29,78 +28,12 @@ addProp('cup',-2,2);addProp('bottle',3,-1);addProp('ball',-6,-4);addProp('lid',6
 const thrownObjects=[],visualParticles=[];
 const portableUmbrella=umbrella(3,9,0xff6d6d,.72);props.push({mesh:portableUmbrella,type:'umbrella',taken:false});
 const people=[];let nextId=1;const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const teamOutfits = [null, null];
-function styleOutfit(root, team){root.traverse(o=>{if(!o.isMesh)return;const sources=Array.isArray(o.material)?o.material:[o.material];const styled=sources.map(source=>{const n=(source?.name||'').toLowerCase();let color=0x171a20,metalness=.03;if(n.includes('denim')||n.includes('pocket'))color=0x303640;if(n.includes('zipper')){color=0xb3bbc7;metalness=.62}if(n.includes('belt'))color=0x090b0e;if(n.includes('tshirt')||n.includes('front/back')||n.includes('fabric'))color=team===0?0xf4f2e9:0x101318;return new THREE.MeshStandardMaterial({color,roughness:.78,metalness,side:THREE.DoubleSide})});o.material=Array.isArray(o.material)?styled:styled[0];o.castShadow=true;o.receiveShadow=true})}
-function attachTeamOutfit(p) {
- const template = teamOutfits[p.team];
- if (!template || p.outfit) return;
- const model = template.clone(true);
- const bounds = new THREE.Box3().setFromObject(model);
- const center = bounds.getCenter(new THREE.Vector3());
- const scale = 2.04 / (bounds.max.y - bounds.min.y);
- const fitted = new THREE.Group();
- fitted.scale.setScalar(scale);
- fitted.position.set(-center.x * scale, -bounds.min.y * scale, -center.z * scale);
- fitted.add(model);
- fitted.visible=p.bot;
- // Keep the original body for the player, but render only the OBJ on NPCs.
- for (const part of p.bot ? p.g.children : [p.torso, p.shorts]) part.visible = false;
- p.g.add(fitted);
- p.outfit = fitted;
- p.walkMeshes = [];
- model.traverse(part => {
-  if (part.morphTargetInfluences?.length === 2) p.walkMeshes.push(part);
- });
-}
-
-function addWalkPoses(model, bounds) {
- const height = bounds.max.y - bounds.min.y;
- const centerX = (bounds.min.x + bounds.max.x) / 2;
- model.traverse(part => {
-  if (!part.isMesh) return;
-  const vertices = part.geometry.getAttribute('position');
-  const poses = [1, -1].map(direction => {
-   const offsets = new Float32Array(vertices.count * 3);
-   for (let i = 0; i < vertices.count; i++) {
-    const y = (vertices.getY(i) - bounds.min.y) / height;
-    const legWeight = THREE.MathUtils.smoothstep(.50 - y, 0, .45);
-    const side = Math.tanh((vertices.getX(i) - centerX) / (height * .02));
-    offsets[i * 3 + 2] = direction * side * legWeight * height * .09;
-    offsets[i * 3 + 1] = Math.max(0, direction * side) * legWeight * height * .025;
-   }
-   return new THREE.BufferAttribute(offsets, 3);
-  });
-  part.geometry.morphTargetsRelative = true;
-  part.geometry.morphAttributes.position = poses;
-  part.updateMorphTargets();
- });
-}
-function loadTeamOutfits() {
- const obj = new OBJLoader().parse(teamModel);
- // The export includes auxiliary point objects with invalid coordinates.
- // Keep all valid geometry and exclude invalid objects from model fitting.
- const invalid = [];
- obj.traverse(part => {
-  const positions = part.geometry?.getAttribute('position');
-  if (positions && !positions.array.every(Number.isFinite)) invalid.push(part);
- });
- for (const part of invalid) part.removeFromParent();
- const bounds = new THREE.Box3().setFromObject(obj);
- const height = bounds.max.y - bounds.min.y;
- if (!Number.isFinite(height) || height <= 0) throw new Error('Invalid team model bounds');
- addWalkPoses(obj, bounds);
- for (const team of [0, 1]) {
-  teamOutfits[team] = obj.clone(true);
-  styleOutfit(teamOutfits[team], team);
- }
- for (const p of people) attachTeamOutfit(p);
-}
 function person(team,x,z,isPlayer=false){
  const g=new THREE.Group(),shirt=team===2?mat([0xe78265,0x47a69f,0xe9bb57,0xa47db0][nextId%4]):team===0?white:black;const torso=new THREE.Mesh(new THREE.CapsuleGeometry(.39,.64,5,10),shirt);torso.position.y=1.28;g.add(torso);
  const tone=Math.random()<.5?skin:darkSkin,head=new THREE.Mesh(new THREE.SphereGeometry(.27,16,12),tone);head.position.y=2.1;g.add(head);const hair=new THREE.Mesh(new THREE.SphereGeometry(.275,14,8,0,Math.PI*2,0,Math.PI*.45),mat(0x261c1c));hair.position.y=2.2;g.add(hair);const shades=new THREE.Mesh(new THREE.BoxGeometry(.38,.1,.06),mat(0x111111,.2,.7));shades.position.set(0,2.1,.25);g.add(shades);
  const shorts=new THREE.Mesh(new THREE.BoxGeometry(.62,.4,.4),team===0?navy:mat(0x454950));shorts.position.y=.66;g.add(shorts);const legs=[],arms=[];
  for(const s of[-1,1]){const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.115,.48,4,7),team===1?mat(0x282e39):tone);leg.position.set(s*.18,.3,0);g.add(leg);legs.push(leg);const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.095,.5,4,7),tone);arm.position.set(s*.47,1.3,0);arm.rotation.z=-s*.17;g.add(arm);arms.push(arm)}
- g.position.set(x,0,z);g.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(g);const p={id:nextId++,team,g,hp:100,isPlayer,bot:!isPlayer,held:null,cool:0,stun:0,attackT:0,drunk:Math.random()<.22?1:0,alive:true,torso,shorts,legs,arms,walkPhase:Math.random()*Math.PI*2,walking:false,hitT:0};people.push(p);attachTeamOutfit(p);return p
+ g.position.set(x,0,z);g.traverse(o=>{if(o.isMesh)o.castShadow=true});scene.add(g);const p={id:nextId++,team,g,hp:100,isPlayer,bot:!isPlayer,held:null,cool:0,stun:0,attackT:0,drunk:Math.random()<.22?1:0,alive:true,torso,shorts,legs,arms,walkPhase:Math.random()*Math.PI*2,walking:false,hitT:0};people.push(p);attachCrew(p);return p
 }
 const player=person(0,0,6,true);for(let i=0;i<5;i++){person(0,-5+i*2.5,11+Math.random()*4);person(1,-5+i*2.5,-3-Math.random()*5)}
 for(let i=0;i<10;i++){const x=(i%5-2)*7,z=i<5?-14:13;const visitor=person(2,x,z);visitor.stroll={x,z,phase:i*1.7};}
@@ -120,7 +53,7 @@ function melee(){if(player.cool>0)return;player.cool=.38;punchT=1;const v=new TH
 function throwSand(){if(player.cool>0)return;player.cool=.55;const direction=new THREE.Vector3();camera.getWorldDirection(direction);const origin=camera.position.clone().addScaledVector(direction,.6),grainMat=mat(0xf1d497);for(let i=0;i<20;i++){let grain=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.04,5,4),grainMat),v=direction.clone().add(new THREE.Vector3((Math.random()-.5)*.3,(Math.random()-.5)*.3,(Math.random()-.5)*.3)).normalize().multiplyScalar(8+Math.random()*5),life=.42+Math.random()*.18;grain.position.copy(origin);scene.add(grain);let fly=()=>{life-=.016;if(life<=0){scene.remove(grain);return}v.y-=10*.016;grain.position.addScaledVector(v,.016);for(const p of people)if(p!==player&&p.alive&&p.team===1&&p.g.position.distanceTo(grain.position)<.8){damage(p,5,player.g.position);life=0;break}requestAnimationFrame(fly)};fly()}say('חול בעיניים!')}
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
 function throwItem(){if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.position.copy(camera.position).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
-function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
+function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
 function updateThrown(dt){
  for(let i=thrownObjects.length-1;i>=0;i--){
   const q=thrownObjects[i],o=q.mesh;if(q.settled){thrownObjects.splice(i,1);continue}q.trailClock=(q.trailClock||0)-dt;q.previous.copy(o.position);
@@ -295,7 +228,7 @@ function updateOnline(dt){
  online.tick();
  for(const peer of online.peers.values()){
   const s=peer.snapshot;
-  attachTeamOutfit(peer);
+  attachCrew(peer);
   peer.g.visible=s.alive;
   peer.walking=Math.hypot(s.x-peer.g.position.x,s.z-peer.g.position.z)>.06;
   peer.g.position.lerp(new THREE.Vector3(s.x,s.y,s.z),1-Math.exp(-13*dt));
@@ -313,7 +246,7 @@ function hitOnline(direction){
  if(target){online.attack(target);return true}
  return false;
 }
-function animateBody(p,dt){p.gait=THREE.MathUtils.damp(p.gait??0,p.walking?1:0,9,dt);p.walkPhase+=dt*(2.2+7.8*p.gait);const stride=Math.sin(p.walkPhase)*.58*p.gait;p.legs[0].rotation.x=stride;p.legs[1].rotation.x=-stride;const armSwing=Math.sin(p.walkPhase)*.42*p.gait;p.arms[0].rotation.x=-armSwing;p.arms[1].rotation.x=armSwing;if(p.attackT>0){p.attackT=Math.max(0,p.attackT-dt);p.arms[1].rotation.x=-Math.sin(p.attackT/.32*Math.PI)*1.15}if(p.outfit){const step=Math.sin(p.walkPhase)*p.gait;for(const mesh of p.walkMeshes){mesh.morphTargetInfluences[0]=Math.max(0,step);mesh.morphTargetInfluences[1]=Math.max(0,-step)}p.outfit.rotation.x=-.055*p.gait;p.outfit.rotation.z=Math.sin(p.walkPhase)*.045*p.gait;p.outfit.rotation.y=Math.sin(p.walkPhase)*.035*p.gait}}
+function animateBody(p,dt){if(animateCrew(p,dt))return;p.gait=THREE.MathUtils.damp(p.gait??0,p.walking?1:0,9,dt);p.walkPhase+=dt*(2.2+7.8*p.gait);const stride=Math.sin(p.walkPhase)*.58*p.gait;p.legs[0].rotation.x=stride;p.legs[1].rotation.x=-stride;const armSwing=Math.sin(p.walkPhase)*.42*p.gait;p.arms[0].rotation.x=-armSwing;p.arms[1].rotation.x=armSwing;if(p.attackT>0){p.attackT=Math.max(0,p.attackT-dt);p.arms[1].rotation.x=-Math.sin(p.attackT/.32*Math.PI)*1.15}}
 const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+yaw;camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0);const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving;viewHand.rotation.x=-.32*punchT;viewHand.rotation.z=moving?Math.sin(performance.now()*.012)*.045:0;viewHand.position.z=-.38*punchT;viewHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012))*.035:0;leftHand.position.z=-.13*punchT;leftHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012+1))*.025:0;updateThrown(dt);
 camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);updateOnline(dt);animateSeaLife(ocean.time.value);
 for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;if(p.stun>0){p.walking=false;p.stun-=dt;continue}const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;const enemies=inArena?people.filter(q=>q.team<2&&q.team!==p.team&&q.alive):[];if(!enemies.length){p.walking=false;continue}let target=enemies.reduce((a,b)=>p.g.position.distanceTo(a.g.position)<p.g.position.distanceTo(b.g.position)?a:b);let delta=target.g.position.clone().sub(p.g.position);delta.y=0;let d=delta.length();if(d>1.25){p.walking=true;delta.normalize();let wobble=p.drunk?Math.sin(performance.now()*.003+p.id)*.36:0;const speed=p.drunk?1.65:2.25;p.g.position.addScaledVector(new THREE.Vector3(delta.x+wobble,0,delta.z).normalize(),dt*speed);p.g.rotation.y=Math.atan2(delta.x,delta.z);p.g.position.y=Math.abs(Math.sin(performance.now()*.009+p.id))*.045}else{p.walking=false;if(p.cool<=0){p.cool=.9+Math.random()*.5;p.attackT=.32;damage(target,p.drunk?8:11,p.g.position)}}}
@@ -321,11 +254,5 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);let dt=Math.min(clock.getDelta(),.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;scene.background.setHex(underwater?0x276d7c:0x98b3c2);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-requestAnimationFrame(() => {
- try {
-  loadTeamOutfits();
- } catch (error) {
-  console.warn('Could not load team outfits:', error);
- }
-});
+loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});

@@ -8,6 +8,6 @@ esbuild.buildSync({
  entryPoints:[path.join(__dirname,'game.js')],
  outfile:path.join(publicDir,'play.js'),
  nodePaths:(process.env.NODE_PATH||'').split(path.delimiter).filter(Boolean),
- bundle:true,format:'iife',loader:{'.obj':'text'},legalComments:'inline'
+ bundle:true,format:'iife',loader:{'.glb':'binary'},legalComments:'inline'
 });
 fs.copyFileSync(path.join(publicDir,'play.js'),path.join(__dirname,'play.js'));
