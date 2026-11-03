@@ -57,7 +57,7 @@ http.createServer(async (req, res) => {
   } catch {res.writeHead(400).end();}
   return;
  }
- const file=req.method==='GET'&&(files.get(url.pathname)||(/^\/assets\/[\w.-]+\.glb$/.test(url.pathname)?url.pathname.slice(1):null));
+ const file=req.method==='GET'&&(files.get(url.pathname)||(/^(?:\/assets\/[\w.-]+\.glb|\/play-[a-f0-9]{12}\.js)$/.test(url.pathname)?url.pathname.slice(1):null));
  if (!file) {res.writeHead(404).end();return;}
  const glb=file.endsWith('.glb');
  const built=path.join(__dirname,'public',file);
