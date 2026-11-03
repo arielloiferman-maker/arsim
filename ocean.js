@@ -54,7 +54,7 @@ export function makeOcean(scene) {
     gl_FragColor=vec4(mix(color,vec3(.60,.70,.76),fog),1.);
    }`
  });
- const sea=new THREE.Mesh(new THREE.PlaneGeometry(340,180,240,150),material);
+ const sea=new THREE.Mesh(new THREE.PlaneGeometry(340,180,170,100),material);
  sea.rotation.x=-Math.PI/2;
  sea.position.set(0,.08,-109);
  scene.add(sea);

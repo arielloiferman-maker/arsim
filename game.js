@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 import {loadCrew, attachCrew, animateCrew, crewFall} from './crew.js';
 import {installBlenderWorld, blenderProp} from './blender-world.js';
-import {buildResort, parasol, lounger, sportsBall} from './resort.js';
+import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
 import {makeOcean, waveHeight} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
 import {connectPlayers} from './online.js';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
 const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,180);camera.position.set(0,2,0);scene.add(camera);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;document.querySelector('#game').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xc9f5ff,0xa47445,2));const sun=new THREE.DirectionalLight(0xffd29d,2.5);sun.position.set(-28,19,-15);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort=buildResort(scene);
-const mat=(c,r=.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe8c887),water=new THREE.MeshPhysicalMaterial({color:0x159dc4,roughness:.14,metalness:.1,transparent:true,opacity:.86}),foam=mat(0xd8fbf2),red=mat(0xe8733d),navy=mat(0x263849),white=mat(0xf3f0dc),black=mat(0x22252c),skin=mat(0xd6a478),darkSkin=mat(0x956344),plastic=mat(0xf4d748,.45),pink=mat(0xff65a5),glass=new THREE.MeshPhysicalMaterial({color:0x4dc4a1,roughness:.05,transparent:true,opacity:.72,transmission:.15}),wood=mat(0xc69656);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));renderer.shadowMap.enabled=true;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;document.querySelector('#game').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xc9f5ff,0xa47445,2));const sun=new THREE.DirectionalLight(0xffd29d,2.5);sun.position.set(-28,19,-15);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
+const mat=(c,r=.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe8c887),water=new THREE.MeshPhysicalMaterial({color:0x159dc4,roughness:.14,metalness:.1,transparent:true,opacity:.86}),foam=mat(0xd8fbf2),red=mat(0xe8733d),navy=mat(0x263849),white=mat(0xf3f0dc),black=mat(0x22252c),skin=mat(0xd6a478),darkSkin=mat(0x956344),plastic=mat(0xf4d748,.45),pink=mat(0xff65a5),glass=new THREE.MeshPhysicalMaterial({color:0x4dc4a1,roughness:.05,transparent:true,opacity:.72}),wood=mat(0xc69656);
 const plane=new THREE.Mesh(new THREE.PlaneGeometry(10000,10000),sand);plane.rotation.x=-Math.PI/2;plane.position.set(0,-.08,4981);plane.receiveShadow=true;scene.add(plane);
 const ocean=makeOcean(scene);const sky=sunsetSky(scene);
 const fallbackSea=new THREE.Group();scene.add(fallbackSea);const animateSeaLife=addSeaLife(fallbackSea);let blenderSea=null;
@@ -206,6 +206,16 @@ function updateTraversal(move,dt){
  }
  pos.y=THREE.MathUtils.damp(pos.y,floor,16,dt);
 }
+let frameCost=1/60, qualityTime=0;
+function adaptResolution(rawDt){
+ if(rawDt>.25)return;
+ frameCost=THREE.MathUtils.lerp(frameCost,rawDt,.035);
+ qualityTime+=rawDt;
+ if(qualityTime<2.2)return;
+ qualityTime=0;
+ const ratio=renderer.getPixelRatio();
+ if(frameCost>1/38&&ratio>.67)renderer.setPixelRatio(Math.max(.65,ratio*.83));
+}
 const controls={forward:'KeyW',back:'KeyS',left:'KeyA',right:'KeyD'};
 window.addEventListener('beach-lobby-open',()=>{keys={};});
 window.addEventListener('blur',()=>{keys={};});
@@ -244,12 +254,12 @@ function hitOnline(direction){
 }
 function animateBody(p,dt){if(animateCrew(p,dt))return;p.gait=THREE.MathUtils.damp(p.gait??0,p.walking?1:0,9,dt);p.walkPhase+=dt*(2.2+7.8*p.gait);const stride=Math.sin(p.walkPhase)*.58*p.gait;p.legs[0].rotation.x=stride;p.legs[1].rotation.x=-stride;const armSwing=Math.sin(p.walkPhase)*.42*p.gait;p.arms[0].rotation.x=-armSwing;p.arms[1].rotation.x=armSwing;if(p.attackT>0){p.attackT=Math.max(0,p.attackT-dt);p.arms[1].rotation.x=-Math.sin(p.attackT/.32*Math.PI)*1.15}}
 const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+yaw;camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0);const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving;viewHand.rotation.x=-.32*punchT;viewHand.rotation.z=moving?Math.sin(performance.now()*.012)*.045:0;viewHand.position.z=-.38*punchT;viewHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012))*.035:0;leftHand.position.z=-.13*punchT;leftHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012+1))*.025:0;updateThrown(dt);
-camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);updateOnline(dt);if(blenderSea)blenderSea(dt);else animateSeaLife(ocean.time.value);
+camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
 for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;if(p.stun>0){p.walking=false;p.stun-=dt;continue}const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;const enemies=inArena?people.filter(q=>q.team<2&&q.team!==p.team&&q.alive):[];if(!enemies.length){p.walking=false;continue}let target=enemies.reduce((a,b)=>p.g.position.distanceTo(a.g.position)<p.g.position.distanceTo(b.g.position)?a:b);let delta=target.g.position.clone().sub(p.g.position);delta.y=0;let d=delta.length();if(d>1.25){p.walking=true;delta.normalize();let wobble=p.drunk?Math.sin(performance.now()*.003+p.id)*.36:0;const speed=p.drunk?1.65:2.25;p.g.position.addScaledVector(new THREE.Vector3(delta.x+wobble,0,delta.z).normalize(),dt*speed);p.g.rotation.y=Math.atan2(delta.x,delta.z);p.g.position.y=Math.abs(Math.sin(performance.now()*.009+p.id))*.045}else{p.walking=false;if(p.cool<=0){p.cool=.9+Math.random()*.5;p.attackT=.32;damage(target,p.drunk?8:11,p.g.position)}}}
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
-function frame(){requestAnimationFrame(frame);let dt=Math.min(clock.getDelta(),.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;scene.background.setHex(underwater?0x276d7c:0x98b3c2);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{blenderSea=tick;scene.remove(fallbackSea)}).catch(error=>console.warn('Could not load Blender world:',error));
+function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;scene.background.setHex(underwater?0x276d7c:0x98b3c2);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
+installBlenderWorld(scene,resort,props).then(tick=>{blenderSea=tick;scene.remove(fallbackSea);renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});

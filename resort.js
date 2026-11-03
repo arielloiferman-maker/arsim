@@ -79,6 +79,17 @@ function hotel(g,x,z,w,h,c) {
   }
  }
 }
+const px=29,pz=-7;
+export function resortRoutes(){
+ const path=new T.CatmullRomCurve3([[px-4,5.64,pz-4],[px-4,4.7,pz-2],[px-4,1.25,pz],[px-4,.43,pz+3]].map(p=>new T.Vector3(...p)));
+ const spiral=[new T.Vector3(px+4,5.64,pz-4)];
+ for(let i=0;i<=52;i++){
+  const t=i/52,a=t*Math.PI*3.3;
+  spiral.push(new T.Vector3(px+4+Math.sin(a)*1.85,5.6-t*5.15,pz-3+Math.cos(a)*1.85));
+ }
+ spiral.push(new T.Vector3(px+4,.43,pz+.9));
+ return [{x:px-4,z:pz-4,path},{x:px+4,z:pz-4,path:new T.CatmullRomCurve3(spiral)}];
+}
 export function buildResort(scene) {
  const g=new T.Group(); scene.add(g);
  const pickups=[];
@@ -150,7 +161,6 @@ export function buildResort(scene) {
   mesh(g,new T.CylinderGeometry(.61,.61,.075,10),cream,x,.76,-12.2);
  }
  // Pool, open flume and spiral tube with timber stair towers.
- const px=29,pz=-7;
  box(g,px,.07,pz,15,.15,14,0xbaa68e);
  box(g,px,.18,pz+2,12,.16,7,cream);
  box(g,px,.27,pz+2,11.45,.035,6.45,0x77c6cc);
@@ -159,21 +169,18 @@ export function buildResort(scene) {
   box(g,tx-.5,5.55,pz-4,3.4,.18,2.4,timber);
   for(let i=0;i<24;i++)box(g,tx-1.5,i*.23+.12,pz+2-i*.26,1,.17,.34,timber);
  }
- const path=new T.CatmullRomCurve3([[px-4,5.64,pz-4],[px-4,4.7,pz-2],[px-4,1.25,pz],[px-4,.43,pz+3]].map(p=>new T.Vector3(...p)));
+ const slides=resortRoutes();
+ const path=slides[0].path;
  for(let i=0;i<33;i++){
   const p=path.getPoint(i/33), tangent=path.getTangent(i/33), angle=Math.atan2(-tangent.y,tangent.z);
   box(g,p.x,p.y,p.z,2.05,.09,.29,cream).rotation.x=angle;
   for(const dx of [-1.06,1.06])box(g,p.x+dx,p.y+.14,p.z,.11,.3,.29,0x4977a0).rotation.x=angle;
  }
- const spiral=[];
- for(let i=0;i<=52;i++){const t=i/52,a=t*Math.PI*3.3;spiral.push(new T.Vector3(px+4+Math.sin(a)*1.85,5.6-t*5.15,pz-3+Math.cos(a)*1.85));}
- spiral.unshift(new T.Vector3(px+4,5.64,pz-4));
- spiral.push(new T.Vector3(px+4,.43,pz+.9));
- const tubePath=new T.CatmullRomCurve3(spiral);
+ const tubePath=slides[1].path;
  mesh(g,new T.TubeGeometry(tubePath,84,.47,10,false),0xe95136);
  for(let i=0;i<23;i++)box(g,px-7.5+i*.66,.56,pz+7,.47,1.03,.08,cream);
  for(const y of [.27,.86])box(g,px,y,pz+7,15.4,.09,.07,cream);
- return {layout:g,pickups,jetSkis,slides:[{x:px-4,z:pz-4,path},{x:px+4,z:pz-4,path:tubePath}]};
+ return {layout:g,pickups,jetSkis,slides};
 }
 
 export function sportsBall(type) {

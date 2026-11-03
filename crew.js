@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {loadModel} from './model-loader.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import niko from './characters/niko.glb';
 import avi from './characters/avi.glb';
@@ -7,10 +7,7 @@ import lior from './characters/lior.glb';
 
 let crew=[];
 export async function loadCrew(){
- const loader=new GLTFLoader();
- crew=await Promise.all([niko,avi,lior].map(bytes=>loader.parseAsync(
-  bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),''
- )));
+ crew=await Promise.all([niko,avi,lior].map(loadModel));
 }
 
 export function attachCrew(person){
@@ -32,7 +29,8 @@ export function attachCrew(person){
    return result;
   };
   part.material=Array.isArray(part.material)?part.material.map(style):style(part.material);
-  part.castShadow=part.receiveShadow=true;
+  part.castShadow=false;
+  part.receiveShadow=true;
   if(part.isSkinnedMesh)part.frustumCulled=false;
  });
  for(const child of person.g.children)child.visible=false;

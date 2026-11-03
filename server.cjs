@@ -57,10 +57,14 @@ http.createServer(async (req, res) => {
   } catch {res.writeHead(400).end();}
   return;
  }
- const file=req.method==='GET'&&files.get(url.pathname);
+ const file=req.method==='GET'&&(files.get(url.pathname)||(/^\/assets\/[\w.-]+\.glb$/.test(url.pathname)?url.pathname.slice(1):null));
  if (!file) {res.writeHead(404).end();return;}
- res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8','Cache-Control':'no-cache'});
- fs.createReadStream(path.join(__dirname,file)).pipe(res);
+ const glb=file.endsWith('.glb');
+ const built=path.join(__dirname,'public',file);
+ const target=fs.existsSync(built)?built:path.join(__dirname,file);
+ if(!fs.existsSync(target)){res.writeHead(404).end();return;}
+ res.writeHead(200,{'Content-Type':glb?'model/gltf-binary':file.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8','Cache-Control':glb?'public, max-age=31536000, immutable':'no-cache'});
+ fs.createReadStream(target).pipe(res);
 }).listen(Number(process.env.PORT)||4183,'127.0.0.1',()=>console.log('Beach game ready on port '+(process.env.PORT||4183)));
 
 function removePlayer(player){
