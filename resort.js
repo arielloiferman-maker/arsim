@@ -173,7 +173,7 @@ export function buildResort(scene) {
  mesh(g,new T.TubeGeometry(tubePath,84,.47,10,false),0xe95136);
  for(let i=0;i<23;i++)box(g,px-7.5+i*.66,.56,pz+7,.47,1.03,.08,cream);
  for(const y of [.27,.86])box(g,px,y,pz+7,15.4,.09,.07,cream);
- return {pickups,jetSkis,slides:[{x:px-4,z:pz-4,path},{x:px+4,z:pz-4,path:tubePath}]};
+ return {layout:g,pickups,jetSkis,slides:[{x:px-4,z:pz-4,path},{x:px+4,z:pz-4,path:tubePath}]};
 }
 
 export function sportsBall(type) {

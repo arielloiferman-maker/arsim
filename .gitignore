@@ -6,3 +6,5 @@ chol.obj
 .dev.vars*
 .env*
 *.zip
+*.blend
+*.blend1
