@@ -21,6 +21,75 @@ function beam(g,a,b,r,c) {
  return m;
 }
 const timber=0x875437, cream=0xffedcc;
+export const beerShop={x:-31,z:-2,halfWidth:3.8,halfDepth:2.7,doorHalfWidth:1.15};
+export const beerShopSeats=[-2.5,2.5].map(offset=>({x:beerShop.x+offset,z:beerShop.z+3.55}));
+
+export function insideBeerShop(position){
+ return Math.abs(position.x-beerShop.x)<beerShop.halfWidth
+     &&Math.abs(position.z-beerShop.z)<beerShop.halfDepth;
+}
+
+export function beerShopWall(x,z){
+ const dx=Math.abs(x-beerShop.x),dz=z-beerShop.z;
+ const {halfWidth,halfDepth,doorHalfWidth}=beerShop;
+ if(dx>halfWidth+.25||Math.abs(dz)>halfDepth+.25)return false;
+ const counter=dx<2.95&&Math.abs(dz+1.8)<.53;
+ return counter||dx>halfWidth-.25||dz< -halfDepth+.25||(dz>halfDepth-.25&&dx>doorHalfWidth-.18);
+}
+
+export function beerBottle(){
+ const bottle=new T.Group();
+ mesh(bottle,new T.CylinderGeometry(.092,.096,.24,16),0x683210,0,.12);
+ mesh(bottle,new T.CylinderGeometry(.044,.092,.076,16),0x683210,0,.278);
+ mesh(bottle,new T.CylinderGeometry(.041,.044,.10,16),0x683210,0,.36);
+ mesh(bottle,new T.CylinderGeometry(.048,.048,.019,16),0xd5af5c,0,.416);
+ mesh(bottle,new T.CylinderGeometry(.095,.096,.105,16),0xede0aa,0,.14);
+ return bottle;
+}
+
+export function buildBeerShop(scene){
+ const shop=new T.Group();
+ const {x,z,halfWidth,halfDepth,doorHalfWidth}=beerShop;
+ shop.position.set(x,0,z);
+ const wall=0xb77649,roof=0x224854,trim=0xe4ae69;
+ box(shop,0,-.025,0,halfWidth*2,.06,halfDepth*2,0xb59466);
+ box(shop,0,1.42,-halfDepth,halfWidth*2,2.84,.18,wall);
+ for(const side of [-1,1]){
+  box(shop,side*halfWidth,1.42,0,.18,2.84,halfDepth*2,wall);
+  box(shop,side*(halfWidth+doorHalfWidth)/2,1.42,halfDepth,halfWidth-doorHalfWidth,2.84,.18,wall);
+  box(shop,side*doorHalfWidth,1.10,halfDepth,.13,2.2,.25,trim);
+ }
+ box(shop,0,2.56,halfDepth,doorHalfWidth*2,.64,.18,wall);
+ box(shop,0,2.94,0,8.2,.22,6.12,roof);
+ box(shop,0,.49,-1.8,5.6,.98,.72,0x70472e);
+ box(shop,0,1.02,-1.8,5.75,.12,.88,trim);
+ box(shop,0,1.72,-2.49,5.5,.085,.34,trim);
+ for(const seat of beerShopSeats){
+  const seatX=seat.x-x,seatZ=seat.z-z;
+  box(shop,seatX,.49,seatZ,1.7,.15,.55,trim);
+  box(shop,seatX,.77,seatZ-.28,1.7,.36,.11,wall);
+  for(const side of [-1,1])box(shop,seatX+side*.63,.23,seatZ,.13,.46,.40,roof);
+ }
+ for(let i=0;i<9;i++){
+  const bottle=beerBottle();
+  bottle.position.set((i-4)*.53,1.77,-2.45);
+  shop.add(bottle);
+ }
+ const sign=document.createElement('canvas');
+ sign.width=512;sign.height=128;
+ const ctx=sign.getContext('2d');
+ ctx.fillStyle='#193c49';ctx.fillRect(0,0,512,128);
+ ctx.strokeStyle='#e1b765';ctx.lineWidth=5;ctx.strokeRect(9,9,494,110);
+ ctx.font='bold 54px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillStyle='#fff0ba';ctx.fillText('חנות בירה',256,65);
+ const label=new T.CanvasTexture(sign);
+ label.colorSpace=T.SRGBColorSpace;
+ const face=new T.Mesh(new T.PlaneGeometry(2.8,.7),new T.MeshBasicMaterial({map:label}));
+ face.position.set(0,2.56,halfDepth+.11);
+ shop.add(face);
+ scene.add(shop);
+ return shop;
+}
 export function parasol(color) {
  const g=new T.Group();
  beam(g,[0,0,0],[0,2.64,0],.045,0xede4d2);

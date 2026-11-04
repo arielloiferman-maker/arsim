@@ -5,15 +5,16 @@ import {seaAtmosphereGLSL,seaHorizon,seaSunColor,seaSunDirection} from './sea-at
 
 export const oceanBounds={halfWidth:1800,shoreZ:-19,farZ:-3619};
 export const seaLevel=.08;
+const waveScale=.36;
 
 export function waveHeight(x,z,t) {
  const shore=Math.max(0,Math.min(1,(-19-z)/48));
  const offshore=shore*shore*(3-2*shore);
  const phase=z*.18+x*.042+t*.86+.44*Math.sin(x*.061-t*.17);
  const crest=.5+.5*Math.sin(phase);
- return (.095+.44*offshore)*(crest**3-.3125)
+ return waveScale*((.095+.44*offshore)*(crest**3-.3125)
   +(.035+.083*offshore)*Math.sin(x*.105-z*.096-t*.54)
-  +.025*Math.sin(x*.41+z*.52+t*1.35);
+  +.025*Math.sin(x*.41+z*.52+t*1.35));
 }
 
 const waveGLSL=`
@@ -32,7 +33,7 @@ const waveGLSL=`
      +.025*cos(chop)*vec2(.41,.52);
   float height=amplitude*(crest*crest*crest-.3125)
      +secondaryAmplitude*sin(secondary)+.025*sin(chop);
-  return vec3(height,gradient);
+  return vec3(height,gradient)*${waveScale};
  }
 `;
 
@@ -104,18 +105,19 @@ export function makeOcean(scene) {
     float sunAlignment=max(0.,dot(reflected,sunDirection));
     float sunPath=pow(sunAlignment,18.);
     vec3 color=mix(vec3(.045,.26,.32),seaTint,smoothstep(0.,43.,depth));
-    float backlit=pow(max(0.,dot(viewDir.xz,-sunDirection.xz)),3.);
-    color+=vec3(.012,.12,.19)*smoothstep(.35,1.03,swell.x)*(.2+.8*backlit);
     color+=vec3(.014,.032,.052)*(.5+.5*ripples);
     color=mix(color,skyReflection,clamp(fresnel*.88,.04,.88));
     color+=sunTint*sunPath*.29;
     float foam=(1.-smoothstep(.06,2.1,depth))*smoothstep(.025,.13,swell.x+.038*ripples)*.42;
     vec2 d=p-wake.xy;
     float behind=-dot(d,wake.zw), side=abs(d.x*wake.w-d.y*wake.z);
-    float wash=smoothstep(0.,1.,behind)*(1.-smoothstep(6.,14.,behind))*(1.-smoothstep(.14,.8,abs(side-(.2+behind*.26))));
+    float wakeLength=mix(5.,44.,wakePower);
+    float wakeWidth=mix(.45,2.1,wakePower);
+    float trail=1.-smoothstep(wakeLength*.38,wakeLength,behind);
+    float wash=smoothstep(0.,1.,behind)*trail*(1.-smoothstep(.14,wakeWidth,abs(side-(.2+behind*.19))));
     float churn=smoothstep(-.25,.72,ripples*.76+chop*.24);
-    float centerWash=smoothstep(0.,.65,behind)*(1.-smoothstep(3.,11.,behind))
-      *(1.-smoothstep(.08,.75+max(0.,behind)*.09,side));
+    float centerWash=smoothstep(0.,.65,behind)*trail
+      *(1.-smoothstep(.08,wakeWidth+max(0.,behind)*.08,side));
     foam=max(foam,wakePower*max(wash*(.52+.42*churn),centerWash*churn*.84));
     color=mix(color,vec3(.73,.89,.99),clamp(foam,0.,.93));
     float fog=smoothstep(visibility*.53,visibility,distanceToEye);

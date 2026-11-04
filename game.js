@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {loadCrew, attachCrew, animateCrew, crewFall, crewSandReaction, startCrewBoxing, advanceCrewBoxing} from './crew.js';
 import {installBlenderWorld, blenderProp} from './blender-world.js';
 import blenderLook from './blender-look.json';
-import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
+import {buildResort, parasol, lounger, sportsBall, resortRoutes, buildBeerShop, beerBottle, insideBeerShop, beerShopWall, beerShopSeats} from './resort.js';
 import {makeOcean, waveHeight, oceanBounds, seaLevel} from './ocean.js';
 import {seaHorizon, seaSunColor, seaSunDirection} from './sea-atmosphere.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
@@ -25,13 +25,14 @@ const environmentGenerator=new THREE.PMREMGenerator(renderer);
 scene.environment=environmentGenerator.fromScene(lightingSky,.055,.1,200).texture;
 scene.environmentIntensity=.42;
 environmentGenerator.dispose();
+buildBeerShop(scene);
 const fallbackSea=new THREE.Group();scene.add(fallbackSea);const animateSeaLife=addSeaLife(fallbackSea);let blenderSea=null;
 textureSand(sand);const fallbackWetSand=addWetSand(scene);
 const seabed=new THREE.Mesh(new THREE.PlaneGeometry(340,180),sand);
 seabed.rotation.x=-Math.PI/2;seabed.position.set(0,-5,-109);scene.add(seabed);
 const umbrella=(x,z,color,sc=1)=>{const g=parasol(color);g.position.set(x,0,z);g.scale.setScalar(sc);scene.add(g);return g};
 // Pickups model the beach items from the supplied references.
-const props=resort.pickups.map(prop=>({...prop,taken:false}));function makeObject(type){const imported=blenderProp(type);if(imported)return imported;let o;if(type==='chair')return lounger();if(['ball','volley','beachball'].includes(type))return sportsBall(type);if(type==='cup'){o=new THREE.Mesh(new THREE.CylinderGeometry(.11,.16,.3,12),pink);o.position.y=.16}else if(type==='bottle'){o=new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,.58,10),glass);o.position.y=.29}else if(type==='paddle'){o=new THREE.Group();let blade=new THREE.Mesh(new THREE.BoxGeometry(.52,.045,.72),wood),handle=new THREE.Mesh(new THREE.BoxGeometry(.15,.06,.42),black);blade.position.y=.12;handle.position.set(0,.1,-.52);o.add(blade,handle)}else if(type==='blanket'){o=new THREE.Group();let colors=[0x193ca4,0x3b7d32,0xf2cc28,0x193ca4,0x3b7d32];for(let i=0;i<5;i++){let strip=new THREE.Mesh(new THREE.BoxGeometry(.4,.035,1.55),mat(colors[i],.6));strip.position.set((i-2)*.4,.035,0);o.add(strip)}}else if(type==='chair'){o=new THREE.Group();let frame=mat(0xc6954e),fabric=mat(0x4a78be);let seat=new THREE.Mesh(new THREE.BoxGeometry(.72,.055,.95),fabric);seat.position.set(0,.52,0);seat.rotation.x=-.45;o.add(seat);for(const x of[-.42,.42])for(const z of[-.38,.38]){let leg=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.25,7),frame);leg.position.set(x,.48,z);leg.rotation.x=z<0?.55:-.55;o.add(leg)}}else{o=new THREE.Mesh(new THREE.BoxGeometry(.58,.08,.48),plastic);o.position.y=.15}o.traverse(q=>{if(q.isMesh){q.castShadow=true;q.receiveShadow=true}});return o}function addProp(type,x,z){let o=makeObject(type);o.position.x=x;o.position.z=z;scene.add(o);props.push({mesh:o,type,taken:false});return o}
+const props=resort.pickups.map(prop=>({...prop,taken:false}));function makeObject(type){const imported=blenderProp(type);if(imported)return imported;let o;if(type==='beer')return beerBottle();if(type==='chair')return lounger();if(['ball','volley','beachball'].includes(type))return sportsBall(type);if(type==='cup'){o=new THREE.Mesh(new THREE.CylinderGeometry(.11,.16,.3,12),pink);o.position.y=.16}else if(type==='bottle'){o=new THREE.Mesh(new THREE.CylinderGeometry(.12,.17,.58,10),glass);o.position.y=.29}else if(type==='paddle'){o=new THREE.Group();let blade=new THREE.Mesh(new THREE.BoxGeometry(.52,.045,.72),wood),handle=new THREE.Mesh(new THREE.BoxGeometry(.15,.06,.42),black);blade.position.y=.12;handle.position.set(0,.1,-.52);o.add(blade,handle)}else if(type==='blanket'){o=new THREE.Group();let colors=[0x193ca4,0x3b7d32,0xf2cc28,0x193ca4,0x3b7d32];for(let i=0;i<5;i++){let strip=new THREE.Mesh(new THREE.BoxGeometry(.4,.035,1.55),mat(colors[i],.6));strip.position.set((i-2)*.4,.035,0);o.add(strip)}}else if(type==='chair'){o=new THREE.Group();let frame=mat(0xc6954e),fabric=mat(0x4a78be);let seat=new THREE.Mesh(new THREE.BoxGeometry(.72,.055,.95),fabric);seat.position.set(0,.52,0);seat.rotation.x=-.45;o.add(seat);for(const x of[-.42,.42])for(const z of[-.38,.38]){let leg=new THREE.Mesh(new THREE.CylinderGeometry(.04,.04,1.25,7),frame);leg.position.set(x,.48,z);leg.rotation.x=z<0?.55:-.55;o.add(leg)}}else{o=new THREE.Mesh(new THREE.BoxGeometry(.58,.08,.48),plastic);o.position.y=.15}o.traverse(q=>{if(q.isMesh){q.castShadow=true;q.receiveShadow=true}});return o}function addProp(type,x,z){let o=makeObject(type);o.position.x=x;o.position.z=z;scene.add(o);props.push({mesh:o,type,taken:false});return o}
 addProp('cup',-2,2);addProp('bottle',3,-1);addProp('ball',-6,-4);addProp('lid',6,3);addProp('beachball',-10,1);addProp('volley',7,4);addProp('paddle',-4,7);addProp('blanket',10,-6);addProp('chair',-11,-7);addProp('ball',1,8);addProp('lid',-12,-8);addProp('cup',8,-10);
 const thrownObjects=[],visualParticles=[];
 const portableUmbrella=umbrella(3,9,0xff6d6d,.72);props.push({mesh:portableUmbrella,type:'umbrella',taken:false});
@@ -45,6 +46,11 @@ function person(team,x,z,isPlayer=false){
 }
 const player=person(0,0,6,true);for(let i=0;i<5;i++){person(0,-5+i*2.5,11+Math.random()*4);person(1,-5+i*2.5,-3-Math.random()*5)}
 for(let i=0;i<10;i++){const x=(i%5-2)*7,z=i<5?-14:13;const visitor=person(2,x,z);visitor.stroll={x,z,phase:i*1.7};}
+for(const {x,z} of beerShopSeats){
+ const patron=person(0,x,z);
+ patron.g.rotation.y=Math.PI;
+ patron.bench={mesh:patron.g,bench:true};
+}
 let yaw=0,pitch=0,health=100,blueScore=0,blackScore=0,keys={},locked=false,dragLook=false,lastMouseX=0,lastMouseY=0,punchT=0;const heldText=document.querySelector('#stats'),notice=document.querySelector('#center');const ray=new THREE.Raycaster();const forward=new THREE.Vector3(),right=new THREE.Vector3();
 const viewHand=new THREE.Group();const forearm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.48,5,8),skin),palm=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),skin);forearm.rotation.z=.62;forearm.position.set(.55,-.47,-.82);palm.position.set(.76,-.72,-.92);viewHand.add(forearm,palm);
 for(let i=0;i<4;i++){const knuckle=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),skin);knuckle.position.set(.66+i*.065,-.78,-1.02);viewHand.add(knuckle)}const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(.045,.13,4,7),skin);thumb.position.set(.88,-.73,-.96);thumb.rotation.z=-.8;viewHand.add(thumb);viewHand.visible=true;camera.add(viewHand);
@@ -135,9 +141,9 @@ document.addEventListener('mousemove',e=>{
 document.addEventListener('contextmenu',e=>e.preventDefault());
 function say(message){notice.textContent=message;notice.style.opacity='1';clearTimeout(say.timer);say.timer=setTimeout(()=>notice.style.opacity='0',850)}
 function pickup(){if(player.held){say('כבר יש לך חפץ ביד');return}let nearest=null,d=4.8;for(const q of props)if(!q.taken){let n=q.mesh.position.distanceTo(player.g.position);if(n<d){nearest=q;d=n}}if(!nearest){say('התקרב לחפץ ולחץ E');return}nearest.taken=true;player.held=nearest.type;player.heldProp=nearest;player.g.add(nearest.mesh);nearest.mesh.position.set(.48,1.18,-.38);nearest.mesh.rotation.set(.3,.5,.5);setViewItem(player.held);heldText.textContent=`❤️ ${health}　|　${icon(player.held)} ביד`;say(`${icon(player.held)} נאסף!`)}
-function icon(t){return {cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
+function icon(t){return {beer:'🍺',cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
 function melee(){
- if(skiRide||!player.alive||player.cool>0)return;
+ if(skiRide||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
  if(firstPersonFists&&!player.held){
   player.cool=comboDuration;
   firstPersonFists.punch(strike);
@@ -148,11 +154,11 @@ function melee(){
  punchT=1;
  strike();
 }
-function strike(){const v=new THREE.Vector3();camera.getWorldDirection(v);v.y=0;v.normalize();if(hitOnline(v)){say("אגרוף לשחקן");return}let target=null,best=player.held==='umbrella'?4.2:player.held==='paddle'||player.held==='chair'?3.6:3.05;for(const p of people)if(p!==player&&p.alive&&p.team===1){const delta=p.g.position.clone().sub(player.g.position);delta.y=0;const dist=delta.length();if(dist<best&&delta.normalize().dot(v)>-.2){best=dist;target=p}}if(target){damage(target,player.held==='umbrella'?45:player.held==='paddle'?38:player.held?32:17,player.g.position);say(player.held==='umbrella'?'מכה עם שמשייה!':player.held?'פגיעה עם חפץ!':'אגרוף!')}else say(player.held?'אין יריב בטווח':'אגרוף באוויר')}
+function strike(){if(insideBeerShop(player.g.position))return;const v=new THREE.Vector3();camera.getWorldDirection(v);v.y=0;v.normalize();if(hitOnline(v)){say("אגרוף לשחקן");return}let target=null,best=player.held==='umbrella'?4.2:player.held==='paddle'||player.held==='chair'?3.6:3.05;for(const p of people)if(p.bot&&p.alive&&!insideBeerShop(p.g.position)){const delta=p.g.position.clone().sub(player.g.position);delta.y=0;const dist=delta.length();if(dist<best&&delta.normalize().dot(v)>-.2){best=dist;target=p}}if(target){damage(target,player.held==='umbrella'?45:player.held==='paddle'?38:player.held?32:17,player.g.position,player);say(player.held==='umbrella'?'מכה עם שמשייה!':player.held?'פגיעה עם חפץ!':'אגרוף!')}else say(player.held?'אין יריב בטווח':'אגרוף באוויר')}
 const grainGeometry=new THREE.SphereGeometry(.06,5,4);
 const grainMaterial=mat(0xf1d497);
 function throwSand(){
- if(skiRide||!player.alive||player.cool>0)return;
+ if(skiRide||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
  player.cool=.55;
  punchT=.8;
  const direction=camera.getWorldDirection(new THREE.Vector3());
@@ -169,11 +175,11 @@ function throwSand(){
 }
 function hitWithSand(particle){
  for(const bot of people){
-  if(!bot.bot||!bot.alive||bot.team!==1||particle.hitBots.has(bot))continue;
+  if(!bot.bot||!bot.alive||insideBeerShop(bot.g.position)||particle.hitBots.has(bot))continue;
   const face=bot.g.position.clone().add(new THREE.Vector3(0,1.6,0));
   if(face.distanceToSquared(particle.mesh.position)>.55**2)continue;
   particle.hitBots.add(bot);
-  damage(bot,5);
+  if(!damage(bot,5,null,player))return false;
   if(bot.alive){
    bot.walking=false;
    bot.attackT=0;
@@ -186,14 +192,20 @@ function hitWithSand(particle){
  return false;
 }
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
-function throwItem(){if(skiRide)return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.visible=true;obj.position.copy(attackOrigin()).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
-function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;p.boxing=null;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
+function throwItem(){if(skiRide||insideBeerShop(player.g.position))return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.visible=true;obj.position.copy(attackOrigin()).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
+function damage(p,n,from,attacker){
+ if(!p.alive||insideBeerShop(p.g.position)||(attacker&&insideBeerShop(attacker.g.position)))return false;
+ if(p.bot&&attacker===player){
+  if(p.bench){poseRider(p,null);p.bench=null;}
+  p.retaliating=true;
+ }
+ p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&attacker===player){credits+=25;showShop()}p.alive=false;p.boxing=null;p.retaliating=false;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}return true;}
 function updateThrown(dt){
  for(let i=thrownObjects.length-1;i>=0;i--){
   const q=thrownObjects[i],o=q.mesh;if(q.settled){thrownObjects.splice(i,1);continue}q.trailClock=(q.trailClock||0)-dt;q.previous.copy(o.position);
   if(q.velocity.lengthSq()>.01){q.velocity.y-=10.5*dt;o.position.addScaledVector(q.velocity,dt);o.rotation.x+=dt*5.8;o.rotation.y+=dt*7;o.rotation.z+=dt*3.4;if(!q.hit&&q.trailClock<=0){q.trailClock=.055;const puff=new THREE.Mesh(new THREE.SphereGeometry(.035,5,4),mat(q.type==='volley'?0x5573c8:0xf0d7a0,.8));puff.position.copy(o.position);scene.add(puff);visualParticles.push({mesh:puff,velocity:q.velocity.clone().multiplyScalar(-.035),life:.16})}}
-  if(!q.hit){
-   for(const p of people){if(p===player||!p.alive||p.team!==1)continue;const center=p.g.position.clone().add(new THREE.Vector3(0,1.05,0)),segment=o.position.clone().sub(q.previous),denom=segment.lengthSq(),t=denom?clamp(center.clone().sub(q.previous).dot(segment)/denom,0,1):0,closest=q.previous.clone().addScaledVector(segment,t);if(closest.distanceToSquared(center)<.64){q.hit=true;q.velocity.multiplyScalar(.32);emitImpact(o.position.clone(),q.type==='volley'?0xf2dc65:0xf3dfb5,22);damage(p,q.damage,q.previous);say('החפץ פגע!');break}}
+  if(!q.hit&&!insideBeerShop(player.g.position)){
+   for(const p of people){if(!p.bot||!p.alive||insideBeerShop(p.g.position))continue;const center=p.g.position.clone().add(new THREE.Vector3(0,1.05,0)),segment=o.position.clone().sub(q.previous),denom=segment.lengthSq(),t=denom?clamp(center.clone().sub(q.previous).dot(segment)/denom,0,1):0,closest=q.previous.clone().addScaledVector(segment,t);if(closest.distanceToSquared(center)<.64){q.hit=true;q.velocity.multiplyScalar(.32);emitImpact(o.position.clone(),q.type==='volley'?0xf2dc65:0xf3dfb5,22);damage(p,q.damage,q.previous,player);say('החפץ פגע!');break}}
   }
   const ball=['ball','beachball','volley'].includes(q.type);const restY={cup:.16,ball:.28,beachball:.48,volley:.38,lid:.15,chair:.15}[q.type]??0;if(o.position.y<restY){o.position.y=restY;if(q.bounces<(ball?3:1)&&Math.abs(q.velocity.y)>1.4){q.velocity.y=Math.abs(q.velocity.y)*(ball?.58:.32);q.velocity.x*=.62;q.velocity.z*=.62;q.bounces++;emitImpact(o.position.clone(),0xe5c78c,7)}else{q.velocity.set(0,0,0);q.settled=true;props.push({mesh:o,type:q.type,taken:false})}}
  }
@@ -229,29 +241,36 @@ const storeItems=[
  {label:'שמשייה',type:'umbrella',cost:60},
  {label:'עזרה ראשונה',cost:45}
 ];
+const beerItems=[{label:'🍺 בקבוק בירה',type:'beer',cost:15}];
 const shopPanel=document.createElement('div');
 shopPanel.className='panel';shopPanel.hidden=true;
 Object.assign(shopPanel.style,{position:'absolute',top:'28%',right:'32%',minWidth:'260px',whiteSpace:'pre-line',lineHeight:'1.8'});
 document.querySelector('#hud').append(shopPanel);
-function nearShop(){return Math.hypot(player.g.position.x+15,player.g.position.z+14)<4;}
+function currentStore(){
+ if(insideBeerShop(player.g.position))return beerItems;
+ return Math.hypot(player.g.position.x+15,player.g.position.z+14)<4?storeItems:null;
+}
 function toggleShop(){
- if(!shopOpen&&!nearShop()){say('החנות ליד בית הקפה על החוף');return}
+ if(!shopOpen&&!currentStore()){say('חנות הבירה נמצאת במערב החוף · B בפנים');return}
  shopOpen=!shopOpen;
  showShop();
 }
 function showShop(){
- shopPanel.hidden=!shopOpen;
- shopPanel.textContent='חנות החוף · 🪙 '+credits+'\n'+storeItems.map((item,i)=>(i+1)+' · '+item.label+' · '+item.cost).join('\n')+'\nB לסגירה';
+ const items=currentStore();
+ shopPanel.hidden=!shopOpen||!items;
+ if(shopPanel.hidden)return;
+ const name=items===beerItems?'חנות בירה · אזור שקט':'חנות החוף';
+ shopPanel.textContent=name+' · 🪙 '+credits+'\n'+items.map((item,i)=>(i+1)+' · '+item.label+' · '+item.cost).join('\n')+'\nB לסגירה';
 }
 function buy(index){
- const item=storeItems[index];
- if(!item||!nearShop()||!player.alive)return;
+ const item=currentStore()?.[index];
+ if(!item||!player.alive)return;
  if(credits<item.cost){say('אין מספיק מטבעות');return}
  if(!item.type&&player.hp>=100){say('החיים כבר מלאים');return}
  credits-=item.cost;
  if(!item.type){player.hp=Math.min(100,player.hp+45);health=player.hp;}
  else {
-  const x=player.g.position.x+.7,z=player.g.position.z;
+  const x=player.g.position.x+(item.type==='beer'?0:.7),z=player.g.position.z;
   if(item.type==='umbrella')props.push({mesh:umbrella(x,z,0x51a6ad,.8),type:item.type,taken:false});
   else addProp(item.type,x,z);
   say('החפץ לידך · E לאיסוף');
@@ -335,13 +354,13 @@ function updateJetSkis(dt){
    ride.sprayTime-=dt;
    if(ride.sprayTime<=0){
     ski.localToWorld(exhaustPoint.set(0,-.019,1.582));
-    const scale=clamp(.95+ride.travelSpeed*.016,1,2.05);
-    const stretch=1+Math.min(ride.travelSpeed,200)*.04;
+    const scale=clamp(.75+ride.travelSpeed*.017,.8,4.1);
+    const stretch=1+Math.min(ride.travelSpeed,200)*.016;
     waterPark?.spray(exhaustPoint.x,exhaustPoint.y,exhaustPoint.z,ski.rotation.y,scale,false,stretch);
     ride.sprayTime=.12-Math.min(ride.travelSpeed,70)*.00075;
    }
   }
-  wakePower=ride.lift>0||ramp?0:Math.min(1,ride.travelSpeed/9);
+  wakePower=ride.lift>0||ramp?0:Math.min(1,Math.sqrt(ride.travelSpeed/195));
  }
  ocean.wakePower.value=THREE.MathUtils.damp(ocean.wakePower.value,wakePower,9,dt);
  for(const ski of resort.jetSkis){
@@ -408,9 +427,10 @@ function updateTraversal(move,dt){
   }
   return;
  }
- player.g.position.add(move);
  const pos=player.g.position;
- if(shopOpen&&!nearShop()){shopOpen=false;showShop();}
+ if(!beerShopWall(pos.x+move.x,pos.z))pos.x+=move.x;
+ if(!beerShopWall(pos.x,pos.z+move.z))pos.z+=move.z;
+ if(shopOpen&&!currentStore()){shopOpen=false;showShop();}
  if(pos.z<oceanBounds.shoreZ&&pos.z>oceanBounds.farZ&&Math.abs(pos.x)<oceanBounds.halfWidth){
   const depth=Math.min(4.2,(-19-pos.z)*.28);
   if(keys.ControlLeft||keys.ControlRight)pos.y-=2.7*dt;
@@ -467,7 +487,7 @@ function updateOnline(dt){
 function hitOnline(direction){
  let target=null,range=3;
  for(const [id,peer] of online.peers){
-  if(peer.snapshot.team===online.team||!peer.snapshot.alive)continue;
+  if(peer.snapshot.team===online.team||!peer.snapshot.alive||insideBeerShop(peer.g.position))continue;
   const delta=peer.g.position.clone().sub(player.g.position), distance=delta.length();
   if(distance<range&&delta.dot(direction)>0){target=id;range=distance;}
  }
@@ -519,32 +539,77 @@ waterPark?.update(dt,player.g.position,inventory.viewDistance);
 firstPersonFists?.ride(thirdPerson||inventory.cameraActive?null:skiRide?.steering??null);
 poseRider(player,thirdPerson&&!inventory.cameraActive&&player.alive?skiRide:null);
 updateOnline(dt);
-for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}if(!p.character?.rider)animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}
-const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;
-if(p.boxing){
- const boxing=p.boxing, target=boxing.target;
- if(!advanceCrewBoxing(p,boxing,()=>{
-  if(!inArena||p.stun>0||!target.alive)return;
-  const delta=target.g.position.clone().sub(p.g.position);
-  const yaw=p.g.rotation.y;
-  if(delta.lengthSq()<=1.45**2&&delta.x*Math.sin(yaw)+delta.z*Math.cos(yaw)>=0){
-   damage(target,p.drunk?8:11,p.g.position);
-  }
- }))p.boxing=null;
- continue;
-}
-if(p.stun>0){p.walking=false;continue}const enemies=inArena?people.filter(q=>q.team<2&&q.team!==p.team&&q.alive):[];if(!enemies.length){p.walking=false;continue}let target=enemies.reduce((a,b)=>p.g.position.distanceTo(a.g.position)<p.g.position.distanceTo(b.g.position)?a:b);let delta=target.g.position.clone().sub(p.g.position);delta.y=0;let d=delta.length();if(d>1.25){p.walking=true;delta.normalize();let wobble=p.drunk?Math.sin(performance.now()*.003+p.id)*.36:0;const speed=p.drunk?1.65:2.25;p.g.position.addScaledVector(new THREE.Vector3(delta.x+wobble,0,delta.z).normalize(),dt*speed);p.g.rotation.y=Math.atan2(delta.x,delta.z);p.g.position.y=Math.abs(Math.sin(performance.now()*.009+p.id))*.045}else{p.walking=false;if(p.cool<=0){p.g.rotation.y=Math.atan2(delta.x,delta.z);
- const boxing=startCrewBoxing(p);
- if(boxing){
-  p.boxing={...boxing,target};
-  p.cool=boxing.action.getClip().duration+.25+Math.random()*.35;
+for(const person of people){
+ if(person.hitT>0){
+  person.hitT=Math.max(0,person.hitT-dt);
+  const reaction=person.hitT/.2;
+  person.g.scale.set(1+.18*reaction,1-.22*reaction,1+.18*reaction);
+  person.g.rotation.x=-.16*reaction;
  }else{
-  p.cool=.9+Math.random()*.5;
-  p.attackT=.32;
-  damage(target,p.drunk?8:11,p.g.position);
- }}}}
+  person.g.scale.set(1,1,1);
+  person.g.rotation.x=0;
+ }
+ if(!person.character?.rider)animateBody(person,dt);
+ if(person.bot&&person.alive)updateBot(person,dt);
+}
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
+}
+function updateBot(bot,dt){
+ const position=bot.g.position;
+ const playerPosition=player.g.position;
+ bot.cool-=dt;
+ bot.stun=Math.max(0,bot.stun-dt);
+ bot.sandT=Math.max(0,(bot.sandT??0)-dt);
+ if(bot.bench){
+  if(!bot.character?.rider)poseRider(bot,bot.bench);
+  return;
+ }
+ if(!player.alive||insideBeerShop(playerPosition)||insideBeerShop(position)||position.distanceToSquared(playerPosition)>18**2){
+  bot.retaliating=false;
+  bot.boxing=null;
+ }
+ if(bot.stun>0||bot.sandT>0){bot.walking=false;return;}
+ if(!bot.retaliating){
+  bot.walking=false;
+  const route=bot.stroll;
+  if(!route)return;
+  route.phase+=dt*.38;
+  const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;
+  const next=new THREE.Vector3(x,0,z);
+  if(insideBeerShop(next)||beerShopWall(x,z))return;
+  bot.g.rotation.y=Math.atan2(x-position.x,z-position.z);
+  position.copy(next);
+  bot.walking=true;
+  return;
+ }
+ const delta=playerPosition.clone().sub(position);
+ const range=delta.length();
+ if(bot.boxing){
+  if(!advanceCrewBoxing(bot,bot.boxing,()=>{
+   if(range<=1.45&&delta.x*Math.sin(bot.g.rotation.y)+delta.z*Math.cos(bot.g.rotation.y)>=0){
+    damage(player,bot.drunk?8:11,position,bot);
+   }
+  }))bot.boxing=null;
+  return;
+ }
+ bot.g.rotation.y=Math.atan2(delta.x,delta.z);
+ if(range>1.25){
+  delta.y=0;
+  const next=position.clone().addScaledVector(delta.normalize(),dt*(bot.drunk?1.65:2.25));
+  bot.walking=!insideBeerShop(next)&&!beerShopWall(next.x,next.z);
+  if(bot.walking)position.copy(next);
+  return;
+ }
+ bot.walking=false;
+ if(bot.cool>0)return;
+ bot.boxing=startCrewBoxing(bot);
+ if(bot.boxing)bot.cool=bot.boxing.action.getClip().duration+.25+Math.random()*.35;
+ else{
+  bot.cool=.9+Math.random()*.5;
+  bot.attackT=.32;
+  damage(player,bot.drunk?8:11,position,bot);
+ }
 }
 function frame(){
  requestAnimationFrame(frame);
@@ -575,7 +640,7 @@ function frame(){
  inventory.afterRender();
 }
 frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 33 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 33 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 34 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 34 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadWaterPark(scene).then(park=>{waterPark=park;renderer.shadowMap.needsUpdate=true}).catch(error=>console.warn('Could not load water park:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
