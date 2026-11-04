@@ -42,9 +42,10 @@ export function makeOcean(scene) {
     float depth=max(0.,-19.-p.y);
     float swell=sin(p.y*1.15+time*1.65+.55*sin(p.x*.17));
     float ripples=sin(p.x*4.3+p.y*3.4-time*2.5)*sin(p.x*2.2-p.y*6.8+time*1.9);
+    float chop=sin(p.x*6.2-p.y*3.7+time*3.1)*sin(p.x*2.6+p.y*5.3-time*1.8);
     float glints=pow(max(0.,ripples),9.);
     float surfaceSlope=cos(p.y*1.15+time*1.65+.55*sin(p.x*.17));
-    vec3 normal=normalize(vec3(-.15*cos(p.x*.73+p.y*.44-time*1.2),1.,-.22*surfaceSlope+.13*ripples));
+    vec3 normal=normalize(vec3(-.15*cos(p.x*.73+p.y*.44-time*1.2)+.065*chop,1.,-.22*surfaceSlope+.10*ripples));
     vec3 viewDir=normalize(cameraPosition-waterPoint);
     float fresnel=pow(1.-max(0.,dot(viewDir,normal)),4.);
     float reflection=pow(max(0.,dot(reflect(-normalize(sunDirection),normal),viewDir)),mix(110.,18.,roughness));
@@ -56,7 +57,10 @@ export function makeOcean(scene) {
     vec2 d=p-wake.xy;
     float behind=-dot(d,wake.zw), side=abs(d.x*wake.w-d.y*wake.z);
     float wash=smoothstep(0.,1.,behind)*(1.-smoothstep(6.,14.,behind))*(1.-smoothstep(.14,.8,abs(side-(.2+behind*.26))));
-    foam=max(foam,wash*wakePower*(.65+.35*ripples));
+    float churn=smoothstep(-.25,.72,ripples*.76+chop*.24);
+    float centerWash=smoothstep(0.,.65,behind)*(1.-smoothstep(3.,11.,behind))
+      *(1.-smoothstep(.08,.75+max(0.,behind)*.09,side));
+    foam=max(foam,wakePower*max(wash*(.52+.42*churn),centerWash*churn*.84));
     color=mix(color,vec3(.8,.95,.91),clamp(foam,0.,.87));
     float fog=smoothstep(48.,115.,distance(cameraPosition,waterPoint));
     if(cameraPosition.y<0.)color=mix(vec3(.075,.48,.56),vec3(.55,.82,.80),foam*.55+glints*.20);
