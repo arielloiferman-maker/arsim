@@ -50,6 +50,13 @@ export async function loadFirstPersonFists(camera){
  camera.add(mount);
 
  const mixer=new THREE.AnimationMixer(model);
+ const fist=model.getObjectByName('FistR');
+ const fingers=['Finger0R','Finger1R','Finger2R','Finger3R','ThumbR'].map(name=>{
+  const bone=model.getObjectByName(name);
+  return {bone,rest:bone.quaternion.clone()};
+ });
+ const palm=new THREE.Vector3();
+ let heldItem=null,gripTime=0;
  let action,nextContact,onContact;
  function play(){
   action?.stop();
@@ -75,14 +82,32 @@ export async function loadFirstPersonFists(camera){
    onContact=strike;
    play();
   },
-  update(dt,visible,moving,throwMotion){
+  update(dt,visible,moving,throwMotion,item=null){
    if(!visible&&mount.visible)guard();
    mount.visible=visible;
    if(!visible)return;
+   if(item!==heldItem){
+    if(item)guard();
+    heldItem=item;
+    gripTime=0;
+   }
    mount.scale.x=Math.min(1,camera.aspect/1.25);
    mount.position.y=moving?Math.sin(performance.now()*.012)*.015:0;
    mount.position.z=-.12*throwMotion;
    mixer.update(dt);
+   gripTime+=dt;
+   for(const [i,{bone,rest}] of fingers.entries()){
+    const phase=THREE.MathUtils.clamp((gripTime-i*.014)/.32,0,1);
+    const curl=item?Math.sin(Math.PI*phase)*.85+.22*phase:0;
+    bone.quaternion.copy(rest);
+    bone.rotateX(curl*(i===4?.45:1));
+   }
+   if(item){
+    palm.set(0,.082,-.045);
+    camera.worldToLocal(fist.localToWorld(palm));
+    palm.y-=.16*Math.max(0,1-gripTime/.25)**2;
+    item.position.copy(palm);
+   }
    if(onContact&&action.time>=contactTimes[nextContact]){
     nextContact++;
     onContact();
