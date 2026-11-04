@@ -6,6 +6,7 @@ import avi from './characters/avi.glb';
 import lior from './characters/lior.glb';
 
 let crew=[];
+const sandReaction='Hit Reaction | Sand in Eyes';
 export async function loadCrew(){
  crew=await Promise.all([niko,avi,lior].map(loadModel));
 }
@@ -58,11 +59,18 @@ export function crewFall(person){
  return true;
 }
 
+export function crewSandReaction(person){
+ const character=person.character;
+ if(!character?.actions.has(sandReaction))return 3.3;
+ play(character,sandReaction,true);
+ return character.remaining;
+}
+
 export function animateCrew(person,dt){
  const character=person.character;
  if(!character)return false;
  character.remaining=Math.max(0,character.remaining-dt);
- if(person.alive&&person.attackT>0&&!character.wasAttacking){
+ if(person.alive&&!person.sandT&&person.attackT>0&&!character.wasAttacking){
   character.punchSide=!character.punchSide;
   play(character,character.punchSide?'Punch | Right':'Punch | Left',true);
  }
