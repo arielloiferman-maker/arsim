@@ -7,6 +7,9 @@ import lior from './characters/lior.glb';
 
 let crew=[];
 const sandReaction='Hit Reaction | Sand in Eyes';
+const boxingCombo='Avi | Refined Boxing Combo';
+// Contact markers in the 30 fps source action, relative to its first frame.
+const boxingContacts=[11/30,28/30,47/30];
 export async function loadCrew(){
  crew=await Promise.all([niko,avi,lior].map(loadModel));
 }
@@ -64,6 +67,23 @@ export function crewSandReaction(person){
  if(!character?.actions.has(sandReaction))return 3.3;
  play(character,sandReaction,true);
  return character.remaining;
+}
+
+export function startCrewBoxing(person){
+ const character=person.character;
+ if(!character?.actions.has(boxingCombo))return null;
+ play(character,boxingCombo,true);
+ return {action:character.current,nextContact:0};
+}
+
+export function advanceCrewBoxing(person,boxing,hit){
+ const {action}=boxing;
+ if(person.character.current!==action||!person.alive||person.sandT>0)return false;
+ if(action.time>=boxingContacts[boxing.nextContact]){
+  boxing.nextContact++;
+  hit();
+ }
+ return action.time<action.getClip().duration;
 }
 
 export function animateCrew(person,dt){

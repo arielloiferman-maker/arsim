@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import {loadCrew, attachCrew, animateCrew, crewFall, crewSandReaction} from './crew.js';
+import {loadCrew, attachCrew, animateCrew, crewFall, crewSandReaction, startCrewBoxing, advanceCrewBoxing} from './crew.js';
 import {installBlenderWorld, blenderProp} from './blender-world.js';
 import blenderLook from './blender-look.json';
 import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
@@ -88,6 +88,7 @@ function hitWithSand(particle){
   if(bot.alive){
    bot.walking=false;
    bot.attackT=0;
+   bot.boxing=null;
    bot.sandT=crewSandReaction(bot);
   }
   say('חול בעיניים!');
@@ -97,7 +98,7 @@ function hitWithSand(particle){
 }
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
 function throwItem(){if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.position.copy(camera.position).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
-function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
+function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;p.boxing=null;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
 function updateThrown(dt){
  for(let i=thrownObjects.length-1;i>=0;i--){
   const q=thrownObjects[i],o=q.mesh;if(q.settled){thrownObjects.splice(i,1);continue}q.trailClock=(q.trailClock||0)-dt;q.previous.copy(o.position);
@@ -319,12 +320,35 @@ firstPersonFists?.update(dt,showFists,moving,punchT);
 viewHand.visible=leftHand.visible=player.alive&&!showFists;
 viewHand.rotation.x=-.32*punchT;viewHand.rotation.z=moving?Math.sin(performance.now()*.012)*.045:0;viewHand.position.z=-.38*punchT;viewHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012))*.035:0;leftHand.position.z=-.13*punchT;leftHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012+1))*.025:0;updateThrown(dt);
 camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
-for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}if(p.stun>0){p.walking=false;continue}const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;const enemies=inArena?people.filter(q=>q.team<2&&q.team!==p.team&&q.alive):[];if(!enemies.length){p.walking=false;continue}let target=enemies.reduce((a,b)=>p.g.position.distanceTo(a.g.position)<p.g.position.distanceTo(b.g.position)?a:b);let delta=target.g.position.clone().sub(p.g.position);delta.y=0;let d=delta.length();if(d>1.25){p.walking=true;delta.normalize();let wobble=p.drunk?Math.sin(performance.now()*.003+p.id)*.36:0;const speed=p.drunk?1.65:2.25;p.g.position.addScaledVector(new THREE.Vector3(delta.x+wobble,0,delta.z).normalize(),dt*speed);p.g.rotation.y=Math.atan2(delta.x,delta.z);p.g.position.y=Math.abs(Math.sin(performance.now()*.009+p.id))*.045}else{p.walking=false;if(p.cool<=0){p.cool=.9+Math.random()*.5;p.attackT=.32;damage(target,p.drunk?8:11,p.g.position)}}}
+for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}
+const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;
+if(p.boxing){
+ const boxing=p.boxing, target=boxing.target;
+ if(!advanceCrewBoxing(p,boxing,()=>{
+  if(!inArena||p.stun>0||!target.alive)return;
+  const delta=target.g.position.clone().sub(p.g.position);
+  const yaw=p.g.rotation.y;
+  if(delta.lengthSq()<=1.45**2&&delta.x*Math.sin(yaw)+delta.z*Math.cos(yaw)>=0){
+   damage(target,p.drunk?8:11,p.g.position);
+  }
+ }))p.boxing=null;
+ continue;
+}
+if(p.stun>0){p.walking=false;continue}const enemies=inArena?people.filter(q=>q.team<2&&q.team!==p.team&&q.alive):[];if(!enemies.length){p.walking=false;continue}let target=enemies.reduce((a,b)=>p.g.position.distanceTo(a.g.position)<p.g.position.distanceTo(b.g.position)?a:b);let delta=target.g.position.clone().sub(p.g.position);delta.y=0;let d=delta.length();if(d>1.25){p.walking=true;delta.normalize();let wobble=p.drunk?Math.sin(performance.now()*.003+p.id)*.36:0;const speed=p.drunk?1.65:2.25;p.g.position.addScaledVector(new THREE.Vector3(delta.x+wobble,0,delta.z).normalize(),dt*speed);p.g.rotation.y=Math.atan2(delta.x,delta.z);p.g.position.y=Math.abs(Math.sin(performance.now()*.009+p.id))*.045}else{p.walking=false;if(p.cool<=0){p.g.rotation.y=Math.atan2(delta.x,delta.z);
+ const boxing=startCrewBoxing(p);
+ if(boxing){
+  p.boxing={...boxing,target};
+  p.cool=boxing.action.getClip().duration+.25+Math.random()*.35;
+ }else{
+  p.cool=.9+Math.random()*.5;
+  p.attackT=.32;
+  damage(target,p.drunk?8:11,p.g.position);
+ }}}}
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 18 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 18 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 19 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 19 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
