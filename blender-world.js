@@ -3,6 +3,7 @@ import {loadModel} from './model-loader.js';
 import coast from './coast.blend.glb';
 import marine from './marine.blend.glb';
 import terrain from './terrain.blend.glb';
+import riptide from './riptide.glb';
 
 const templates=new Map();
 export function blenderProp(type){
@@ -11,7 +12,13 @@ export function blenderProp(type){
 }
 
 export async function installBlenderWorld(scene,resort,props){
- const [town,seaLife,shore]=await Promise.all([loadModel(coast),loadModel(marine),loadModel(terrain)]);
+ const [town,seaLife,shore,jetSki]=await Promise.all([
+  loadModel(coast),loadModel(marine),loadModel(terrain),
+  loadModel(riptide).catch(error=>{
+   console.warn('Could not load the Riptide jet ski:',error);
+   return null;
+  })
+ ]);
  const marked=[];
  town.scene.traverse(node=>{
   if(node.isMesh)node.castShadow=node.receiveShadow=true;
@@ -58,12 +65,25 @@ export async function installBlenderWorld(scene,resort,props){
  }
  // Preserve the actual vehicles if the player mounted one before the assets loaded.
  for(const [i,ski] of skis.entries()){
-  const vehicle=resort.jetSkis[i];
-  if(!vehicle){resort.jetSkis.push(ski);continue;}
-  vehicle.clear();
-  vehicle.add(...[...ski.children]);
-  scene.attach(vehicle);
-  ski.removeFromParent();
+  const vehicle=resort.jetSkis[i]??ski;
+  if(jetSki){
+   const model=jetSki.scene.clone(true);
+   // The exported bow points toward +Z. Vehicles steer and accelerate toward -Z.
+   model.rotation.y=Math.PI;
+   model.position.y=-.25;
+   model.traverse(part=>{if(part.isMesh)part.receiveShadow=true;});
+   vehicle.clear();
+   vehicle.scale.setScalar(1);
+   vehicle.add(model);
+  }else if(vehicle!==ski){
+   vehicle.clear();
+   vehicle.add(...ski.children);
+  }
+  if(vehicle!==ski){
+   scene.attach(vehicle);
+   ski.removeFromParent();
+  }
+  resort.jetSkis[i]=vehicle;
  }
  const mixer=new THREE.AnimationMixer(seaLife.scene);
  for(const clip of seaLife.animations)mixer.clipAction(clip).play();
