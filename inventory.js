@@ -1,4 +1,4 @@
-export function installInventory({canvas,camera,clearControls,resume,heldItem}){
+export function installInventory({canvas,camera,clearControls,resume,heldItem,capturePhoto}){
  const panel=document.createElement('dialog');
  panel.id='inventory';
  panel.setAttribute('aria-label','אינבנטורי');
@@ -7,7 +7,12 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
  <div class="inventory-grid">
  <button id="equip-camera"><strong>📷 מצלמת טבע</strong><span>זום עד ×40 · צילום בלחיצה שמאלית</span></button>
  <button id="equip-hands"><strong>🤲 ידיים וחפצים</strong><span id="inventory-held">ללא חפץ</span></button>
- </div><p id="equipment-status" role="status"></p>
+ </div><fieldset class="photo-settings"><legend>הגדרות מצלמה</legend>
+ <label>רזולוציה <select id="photo-resolution"><option value="7680">8K · 7680 × 4320</option><option value="3840">4K · 3840 × 2160</option><option value="1920">1080p</option></select></label>
+ <label>מצב צילום <select id="photo-burst"><option value="1">תמונה אחת</option><option value="4">רצף של 4</option><option value="8">רצף של 8</option></select></label>
+ <label>חשיפה <input id="photo-exposure" type="range" min="-2" max="2" value="0" step=".25"></label>
+ <label>זום <input id="photo-lens" type="range" min="1" max="40" value="1" step=".1"></label>
+ </fieldset><p id="equipment-status" role="status"></p>
  <h3>התמונות שלך</h3><p id="photos-empty">צייד את המצלמה, סגור את התיק וצא לצלם.</p>
  <div id="photo-gallery"></div><small>עד 8 תמונות נשמרות כאן במהלך המשחק. לחץ על תמונה כדי להוריד אותה.</small>`;
  const view=document.createElement('div');
@@ -23,6 +28,9 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
  #inventory h2{margin:0}#inventory p{color:#bdd6df;line-height:1.6}
  #inventory button{font:inherit;color:inherit;border:1px solid #8cc9dd66;background:#214556;border-radius:12px;padding:14px;cursor:pointer!important}
  #inventory button:focus-visible{outline:3px solid #ffd36c}
+ .photo-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px;border:1px solid #8cc9dd66;border-radius:12px;padding:12px}
+ .photo-settings label{display:grid;gap:4px}
+ .photo-settings select{width:100%;color:#ecf9ff;background:#214556;border:1px solid #8cc9dd66;border-radius:6px;padding:6px}
  .inventory-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
  .inventory-grid button{text-align:right;display:grid;gap:10px;min-height:116px}
  .inventory-grid strong{font-size:20px}.inventory-grid span{color:#b9dbe6;font-size:14px}
@@ -42,17 +50,20 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
  const cameraButton=find('equip-camera'),handsButton=find('equip-hands');
  const zoomLabel=view.querySelector('#photo-zoom'),gallery=find('photo-gallery');
  const photos=[];
- let equipped=false,zoom=1,pending=false,saving=false,lastShot=0,closingResume=true;
+ let equipped=false,zoom=1,pending=0,saving=false,nextShot=0,closingResume=true;
+ let shotSettings=null;
+ const lens=find('photo-lens');
  const baseFov=camera.fov,baseFar=camera.far;
  function updateLens(){
   camera.fov=2*Math.atan(Math.tan(baseFov*Math.PI/360)/(equipped?zoom:1))*180/Math.PI;
   camera.far=equipped?1400:baseFar;
   camera.updateProjectionMatrix();
   zoomLabel.textContent='×'+zoom.toFixed(1);
+  lens.value=String(zoom);
  }
  function equipment(active){
   equipped=active;
-  pending=false;
+  pending=0;
   document.body.classList.toggle('camera-equipped',active);
   view.hidden=!active||panel.open;
   cameraButton.setAttribute('aria-pressed',String(active));
@@ -63,6 +74,7 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
  function open(){
   if(document.querySelector('dialog[open]'))return;
   clearControls();
+  pending=0;
   document.exitPointerLock?.();
   document.body.classList.add('inventory-open');
   find('inventory-held').textContent=heldItem();
@@ -84,6 +96,7 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
  find('inventory-close').onclick=()=>close();
  cameraButton.onclick=()=>equipment(true);
  handsButton.onclick=()=>equipment(false);
+ lens.oninput=()=>{zoom=Number(lens.value);updateLens();};
  equipment(false);
  const block=event=>{event.preventDefault();event.stopImmediatePropagation();};
  window.addEventListener('keydown',event=>{
@@ -99,9 +112,10 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
   if(event.button===2){equipment(false);return;}
   if(event.button===0){
    if(document.pointerLockElement!==canvas){resume();return;}
-   if(!saving&&performance.now()-lastShot>350){
-    pending=true;
-    lastShot=performance.now();
+   if(!saving&&!pending&&performance.now()>=nextShot){
+    const width=Number(find('photo-resolution').value);
+    shotSettings={width,height:width*9/16,exposure:Number(find('photo-exposure').value)};
+    pending=Number(find('photo-burst').value);
    }
   }
  },true);
@@ -118,24 +132,27 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
   get viewDistance(){return equipped?Math.min(950,200+zoom*22):220;},
   get sensitivity(){return equipped?1/Math.sqrt(zoom):1;},
   afterRender(){
-   if(!pending||saving)return;
-   pending=false;
+   if(!pending||saving||performance.now()<nextShot)return;
+   pending--;
    saving=true;
-   const shot=document.createElement('canvas');
-   shot.width=canvas.width;
-   shot.height=canvas.height;
    try{
-    shot.getContext('2d').drawImage(canvas,0,0);
+    const shot=capturePhoto(shotSettings);
+    const preview=document.createElement('canvas');
+    preview.width=320;preview.height=180;
+    preview.getContext('2d').drawImage(shot,0,0,320,180);
+    const previewUrl=preview.toDataURL('image/jpeg',.84);
     shot.toBlob(blob=>{
      saving=false;
-     if(!blob){find('equipment-status').textContent='הצילום לא נשמר. אפשר לנסות שוב.';return;}
+     nextShot=performance.now()+350;
+     shot.width=shot.height=0;
+     if(!blob){pending=0;find('equipment-status').textContent='הצילום לא נשמר. אפשר לנסות שוב.';return;}
      const url=URL.createObjectURL(blob);
      const link=document.createElement('a');
      link.href=url;
      link.download='beach-photo-'+Date.now()+'.png';
      link.setAttribute('aria-label','הורדת צילום');
      const thumbnail=document.createElement('img');
-     thumbnail.src=url;
+     thumbnail.src=previewUrl;
      thumbnail.alt='צילום מהמשחק';
      link.append(thumbnail);
      gallery.prepend(link);
@@ -147,6 +164,7 @@ export function installInventory({canvas,camera,clearControls,resume,heldItem}){
     },'image/png');
    }catch{
     saving=false;
+    pending=0;
     find('equipment-status').textContent='הצילום לא נשמר. אפשר לנסות שוב.';
    }
   }

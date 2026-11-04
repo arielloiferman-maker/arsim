@@ -48,8 +48,10 @@ export function makeOcean(scene) {
   sunDirection:{value:new THREE.Vector3(...seaSunDirection).normalize()},
   submerged:{value:false},
   visibility:{value:210},
-  normalMap:{value:flatNormal}
+  normalMap:{value:flatNormal},
+  roughnessMap:{value:new THREE.DataTexture(new Uint8Array([0,32,0,255]),1,1)}
  };
+ uniforms.roughnessMap.value.needsUpdate=true;
  loadModel(materialAsset).then(asset=>{
   let material;
   asset.scene.traverse(part=>{if(part.isMesh)material=part.material;});
@@ -57,6 +59,10 @@ export function makeOcean(scene) {
   material.normalMap.wrapS=material.normalMap.wrapT=THREE.RepeatWrapping;
   material.normalMap.anisotropy=4;
   uniforms.normalMap.value=material.normalMap;
+  if(material.roughnessMap){
+   material.roughnessMap.wrapS=material.roughnessMap.wrapT=THREE.RepeatWrapping;
+   uniforms.roughnessMap.value=material.roughnessMap;
+  }
  }).catch(error=>console.warn('Could not load Blender ocean material:',error));
  const material=new THREE.ShaderMaterial({
   uniforms,
@@ -78,7 +84,7 @@ export function makeOcean(scene) {
    uniform vec3 seaTint,skyTint,sunTint,sunDirection;
    uniform float visibility;
    uniform bool submerged;
-   uniform sampler2D normalMap;
+   uniform sampler2D normalMap,roughnessMap;
    varying vec3 waterPoint;
    ${waveGLSL}
    ${seaAtmosphereGLSL}
@@ -92,7 +98,9 @@ export function makeOcean(scene) {
     vec2 flow=vec2(time*.018,-time*.027);
     vec2 uv=p*.12+flow;
     vec3 detailA=texture2D(normalMap,uv).xyz*2.-1.;
-    vec3 detailB=texture2D(normalMap,vec2(.8*p.x+.6*p.y,-.6*p.x+.8*p.y)*.23-flow*.63).xyz*2.-1.;
+    vec2 crossingUV=vec2(.8*p.x+.6*p.y,-.6*p.x+.8*p.y)*.23-flow*.63;
+    vec2 crossingNormal=texture2D(normalMap,crossingUV).xy*2.-1.;
+    vec2 detailB=vec2(dot(crossingNormal,vec2(.8,-.6)),dot(crossingNormal,vec2(.6,.8)));
     float distanceToEye=distance(cameraPosition,waterPoint);
     vec2 detail=(detailA.xy*.22+detailB.xy*.15
       +vec2(cos(dot(p,vec2(3.2,5.1))+time*2.1+chop*.7),cos(dot(p,vec2(-2.1,6.7))-time*2.9+ripples*.8))*.055)
@@ -103,11 +111,12 @@ export function makeOcean(scene) {
     vec3 reflected=reflect(-viewDir,normal);
     vec3 skyReflection=clearSky(reflected,sunDirection);
     float sunAlignment=max(0.,dot(reflected,sunDirection));
-    float sunPath=pow(sunAlignment,18.);
+    float roughness=texture2D(roughnessMap,uv).g;
+    float sunPath=pow(sunAlignment,mix(28.,12.,roughness));
     vec3 color=mix(vec3(.045,.26,.32),seaTint,smoothstep(0.,43.,depth));
     color+=vec3(.014,.032,.052)*(.5+.5*ripples);
     color=mix(color,skyReflection,clamp(fresnel*.88,.04,.88));
-    color+=sunTint*sunPath*.29;
+    color+=sunTint*sunPath*mix(.32,.19,roughness);
     float foam=(1.-smoothstep(.06,2.1,depth))*smoothstep(.025,.13,swell.x+.038*ripples)*.42;
     vec2 d=p-wake.xy;
     float behind=-dot(d,wake.zw), side=abs(d.x*wake.w-d.y*wake.z);
