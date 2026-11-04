@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import look from './blender-look.json';
 
+export const oceanBounds={halfWidth:240,shoreZ:-19,farZ:-439};
+
 export function waveHeight(x,z,t) {
  return .16*Math.sin(z*1.15+t*1.65+.55*Math.sin(x*.17))
   +.085*Math.sin(x*.73+z*.44-t*1.2)+.045*Math.sin(x*.23-z*.62+t*2.1);
@@ -63,9 +65,10 @@ export function makeOcean(scene) {
     #include <colorspace_fragment>
    }`
  });
- const sea=new THREE.Mesh(new THREE.PlaneGeometry(340,180,170,100),material);
+ const {halfWidth,shoreZ,farZ}=oceanBounds;
+ const sea=new THREE.Mesh(new THREE.PlaneGeometry(2*halfWidth,shoreZ-farZ,240,234),material);
  sea.rotation.x=-Math.PI/2;
- sea.position.set(0,.08,-109);
+ sea.position.set(0,.08,(shoreZ+farZ)/2);
  scene.add(sea);
  return uniforms;
 }

@@ -3,7 +3,7 @@ import {loadCrew, attachCrew, animateCrew, crewFall, crewSandReaction, startCrew
 import {installBlenderWorld, blenderProp} from './blender-world.js';
 import blenderLook from './blender-look.json';
 import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
-import {makeOcean, waveHeight} from './ocean.js';
+import {makeOcean, waveHeight, oceanBounds} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
 import {connectPlayers} from './online.js';
 import {loadFirstPersonFists, comboDuration} from './first-person.js';
@@ -63,7 +63,7 @@ function setViewItem(type){
  viewItem.add(item);
  viewItem.rotation.set(type==='umbrella'?0:.16,.18,.08);
 }
-document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(skiRide&&rideModes[e.code]&&!e.repeat){skiRide.mode=rideModes[e.code];return}if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
 let firstLockedMove=false;
 const ridePitchMin=-.62,ridePitchMax=.22;
 function look(dx,dy,maxDelta){
@@ -193,6 +193,12 @@ function updateThrown(dt){
 }
 for(const part of player.g.children)part.visible=false;
 let slideRide=null;
+const rideModes={
+ Digit1:{name:'ECO',speed:15,acceleration:2.2},
+ Digit2:{name:'SPORT',speed:23,acceleration:2.5},
+ Digit3:{name:'BOOST',speed:34,acceleration:3}
+};
+const rideStatus=document.querySelector('#ride-status');
 let skiRide=null;
 let credits=120, shopOpen=false;
 const storeItems=[
@@ -240,10 +246,10 @@ function useJetSki(){
  }
  const ski=resort.jetSkis.find(mesh=>mesh.position.distanceTo(player.g.position)<3);
  if(!ski)return false;
- skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false,crestReady:true,steering:ski.getObjectByName('RiptideSteering')??null};
+ skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false,crestReady:true,mode:rideModes.Digit1,steering:ski.getObjectByName('RiptideSteering')??null};
  yaw=ski.rotation.y;
  pitch=-.15;
- say('W גז · S בלימה · A/D היגוי');
+ say('1 אקו · 2 ספורט · 3 בוסט');
  return true;
 }
 function updateJetSkis(dt){
@@ -256,20 +262,23 @@ function updateJetSkis(dt){
   const ski=ride.mesh;
   const throttle=Number(!!keys.KeyW)-Number(!!keys.KeyS);
   const steer=Number(!!keys.KeyA)-Number(!!keys.KeyD);
-  ride.speed=THREE.MathUtils.damp(ride.speed,throttle*(throttle>0?14:3),2.5,dt);
-  const turn=steer*dt*(.6+Math.abs(ride.speed)*.10);
+  ride.speed=THREE.MathUtils.damp(ride.speed,throttle*(throttle>0?ride.mode.speed:3),ride.mode.acceleration,dt);
+  const turn=steer*dt*(.6+Math.min(14,Math.abs(ride.speed))*.10);
   ski.rotation.y+=turn;
   yaw+=turn;
   const dx=-Math.sin(ski.rotation.y),dz=-Math.cos(ski.rotation.y);
-  ski.position.x=clamp(ski.position.x+dx*ride.speed*dt,-80,80);
-  ski.position.z=clamp(ski.position.z+dz*ride.speed*dt,-130,-19.1);
+  const edge=oceanBounds.halfWidth-12;
+  const {x,z}=ski.position;
+  ski.position.x=clamp(ski.position.x+dx*ride.speed*dt,-edge,edge);
+  ski.position.z=clamp(ski.position.z+dz*ride.speed*dt,oceanBounds.farZ+12,oceanBounds.shoreZ-.1);
+  ride.travelSpeed=dt>0?Math.hypot(ski.position.x-x,ski.position.z-z)/dt:0;
   ski.rotation.z=THREE.MathUtils.damp(ski.rotation.z,-steer*ride.speed*.021,5,dt);
   if(ride.steering)ride.steering.rotation.y=THREE.MathUtils.damp(ride.steering.rotation.y,steer*.33,10,dt);
   ocean.wake.value.set(ski.position.x,ski.position.z,dx,dz);
   const crest=waveHeight(ski.position.x,ski.position.z,time);
   if(crest<.12)ride.crestReady=true;
-  const crestJump=ride.speed>11&&crest>.19&&ride.crestReady;
-  if(ride.lift===0&&ride.speed>4&&(ride.jumpRequested||crestJump)){
+  const crestJump=ride.travelSpeed>11&&crest>.19&&ride.crestReady;
+  if(ride.lift===0&&ride.speed>0&&ride.travelSpeed>4&&(ride.jumpRequested||crestJump)){
    ride.verticalSpeed=2.4+ride.speed*.14;
    ride.lift=.01;
    ride.crestReady=false;
@@ -284,7 +293,7 @@ function updateJetSkis(dt){
     emitImpact(ski.position.clone(),0xd6f6ff,18);
    }
   }
-  wakePower=ride.lift>0?0:Math.min(1,Math.abs(ride.speed)/9);
+  wakePower=ride.lift>0?0:Math.min(1,ride.travelSpeed/9);
  }
  ocean.wakePower.value=THREE.MathUtils.damp(ocean.wakePower.value,wakePower,9,dt);
  for(const ski of resort.jetSkis){
@@ -304,7 +313,14 @@ function updateJetSkis(dt){
   const tilt=airborne>0?skiRide.verticalSpeed*.045:slope*.45;
   ski.rotation.x=THREE.MathUtils.damp(ski.rotation.x,tilt,8,dt);
  }
- if(skiRide)player.g.position.copy(skiRide.mesh.position).add(new THREE.Vector3(0,-.42,0));
+ rideStatus.hidden=!skiRide;
+ if(skiRide){
+  player.g.position.copy(skiRide.mesh.position);
+  player.g.position.y-=.42;
+  const speed=Math.round((skiRide.travelSpeed??0)*3.6);
+  const label=`${skiRide.mode.name} · ${speed} km/h`;
+  if(rideStatus.textContent!==label)rideStatus.textContent=label;
+ }
 }
 function boardSlide(){
  if(slideRide)return true;
@@ -336,7 +352,7 @@ function updateTraversal(move,dt){
  player.g.position.add(move);
  const pos=player.g.position;
  if(shopOpen&&!nearShop()){shopOpen=false;showShop();}
- if(pos.z < -19 && pos.z > -190 && Math.abs(pos.x)<169){
+ if(pos.z<oceanBounds.shoreZ&&pos.z>oceanBounds.farZ&&Math.abs(pos.x)<oceanBounds.halfWidth){
   const depth=Math.min(4.2,(-19-pos.z)*.28);
   if(keys.ControlLeft||keys.ControlRight)pos.y-=2.7*dt;
   else if(keys.Space)pos.y+=2.7*dt;
@@ -450,7 +466,7 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 25 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 25 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 26 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 26 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
