@@ -1,5 +1,5 @@
 import * as T from 'three';
-import look from './blender-look.json';
+import {seaAtmosphereGLSL,seaSunDirection} from './sea-atmosphere.js';
 
 export function addSeaLife(scene) {
  const life=[];
@@ -52,18 +52,40 @@ export function textureSand(material){
 }
 
 export function sunsetSky(scene){
- const [r,g,b]=look.worldColor;
  const sky=new T.Mesh(new T.SphereGeometry(145,32,16),new T.ShaderMaterial({
   side:T.BackSide,depthWrite:false,
-  uniforms:{worldTint:{value:new T.Color(r,g,b)},sunDirection:{value:new T.Vector3(...look.sunDirection)}},
+  uniforms:{sunDirection:{value:new T.Vector3(...seaSunDirection).normalize()}},
   vertexShader:`varying vec3 ray;void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`varying vec3 ray;uniform vec3 worldTint;uniform vec3 sunDirection;void main(){
+  fragmentShader:`varying vec3 ray;uniform vec3 sunDirection;
+  ${seaAtmosphereGLSL}
+  float cloudHash(vec2 p){
+   vec3 h=fract(vec3(p.xyx)*.1031);
+   h+=dot(h,h.yzx+33.33);
+   return fract((h.x+h.y)*h.z);
+  }
+  float cloudNoise(vec2 p){
+   vec2 cell=floor(p),f=fract(p);
+   f=f*f*(3.-2.*f);
+   return mix(mix(cloudHash(cell),cloudHash(cell+vec2(1,0)),f.x),
+              mix(cloudHash(cell+vec2(0,1)),cloudHash(cell+vec2(1,1)),f.x),f.y);
+  }
+  float cloudField(vec2 p){
+   return cloudNoise(p)*.52+cloudNoise(p*2.04+6.)*.27
+        +cloudNoise(p*4.12-9.)*.14+cloudNoise(p*8.23+4.)*.07;
+  }
+  void main(){
    vec3 d=normalize(ray);
-   vec3 c=mix(mix(worldTint,vec3(.73,.54,.40),.43),worldTint*.76,smoothstep(-.08,.66,d.y));
-   float clouds=sin(d.x*17.+d.y*31.)*sin(d.z*12.-d.y*51.)+sin(d.x*37.+d.z*38.)*.34;
-   c=mix(c,vec3(.78,.63,.62),smoothstep(.25,.94,clouds)*smoothstep(.02,.12,d.y)*.55);
-   float sun=max(0.,dot(d,normalize(sunDirection)));
-   c+=vec3(.40,.25,.08)*pow(sun,22.)+vec3(.62,.50,.24)*smoothstep(.9993,.9998,sun);
+   vec3 c=clearSky(d,sunDirection);
+   vec2 cloudUV=d.xz/(max(.02,d.y)+.21)*2.3;
+   float field=cloudField(cloudUV);
+   float density=smoothstep(.43,.67,field);
+   float cloudBand=smoothstep(-.012,.037,d.y)*(1.-smoothstep(.26,.58,d.y));
+   float edgeLight=clamp(.54+(field-cloudField(cloudUV+sunDirection.xz*.24))*3.,0.,1.);
+   float sun=max(0.,dot(d,sunDirection));
+   vec3 cloudColor=mix(vec3(.11,.22,.35),vec3(.93,.96,1.),edgeLight);
+   cloudColor+=vec3(.62,.41,.18)*pow(sun,7.)*edgeLight;
+   c=mix(c,cloudColor,density*cloudBand);
+   c+=vec3(5.3,3.7,2.1)*smoothstep(.99983,.99992,sun)*(1.-density*cloudBand*.91);
    gl_FragColor=vec4(c,1.);
    #include <tonemapping_fragment>
    #include <colorspace_fragment>

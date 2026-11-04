@@ -3,7 +3,8 @@ import {loadCrew, attachCrew, animateCrew, crewFall, crewSandReaction, startCrew
 import {installBlenderWorld, blenderProp} from './blender-world.js';
 import blenderLook from './blender-look.json';
 import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
-import {makeOcean, waveHeight, oceanBounds} from './ocean.js';
+import {makeOcean, waveHeight, oceanBounds, seaLevel} from './ocean.js';
+import {seaHorizon, seaSunColor, seaSunDirection} from './sea-atmosphere.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
 import {connectPlayers} from './online.js';
 import {loadWaterPark} from './water-park.js';
@@ -14,7 +15,7 @@ import {loadFirstPersonFists, comboDuration} from './first-person.js';
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
 const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,260);camera.position.set(0,2,0);scene.add(camera);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=2**blenderLook.exposure;document.querySelector('#game').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(new THREE.Color(...blenderLook.worldColor),0xa47445,blenderLook.worldStrength*2.4));const sun=new THREE.DirectionalLight(new THREE.Color(...blenderLook.sunColor),blenderLook.sunEnergy);sun.position.set(...blenderLook.sunDirection).multiplyScalar(42);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
+scene.add(new THREE.HemisphereLight(new THREE.Color(...blenderLook.worldColor),0xa47445,blenderLook.worldStrength*2.4));const sun=new THREE.DirectionalLight(new THREE.Color(...seaSunColor),blenderLook.sunEnergy);sun.position.set(...seaSunDirection).multiplyScalar(42);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
 const mat=(c,r=.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe8c887),water=new THREE.MeshPhysicalMaterial({color:0x159dc4,roughness:.14,metalness:.1,transparent:true,opacity:.86}),foam=mat(0xd8fbf2),red=mat(0xe8733d),navy=mat(0x263849),white=mat(0xf3f0dc),black=mat(0x22252c),skin=mat(0xd6a478),darkSkin=mat(0x956344),plastic=mat(0xf4d748,.45),pink=mat(0xff65a5),glass=new THREE.MeshPhysicalMaterial({color:0x4dc4a1,roughness:.05,transparent:true,opacity:.72}),wood=mat(0xc69656);
 const plane=new THREE.Mesh(new THREE.PlaneGeometry(10000,10000),sand);plane.rotation.x=-Math.PI/2;plane.position.set(0,-.08,4981);plane.receiveShadow=true;scene.add(plane);
 const ocean=makeOcean(scene);const sky=sunsetSky(scene);
@@ -511,7 +512,7 @@ camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,
 waterPark?.update(dt,player.g.position,inventory.viewDistance);
 firstPersonFists?.ride(thirdPerson||inventory.cameraActive?null:skiRide?.steering??null);
 poseRider(player,thirdPerson&&!inventory.cameraActive&&player.alive?skiRide:null);
-updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
+updateOnline(dt);
 for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}if(!p.character?.rider)animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}
 const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;
 if(p.boxing){
@@ -539,8 +540,36 @@ if(p.stun>0){p.walking=false;continue}const enemies=inArena?people.filter(q=>q.t
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
-function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();ocean.follow(camera.position.x,camera.position.z,inventory.viewDistance-10);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:inventory.viewDistance*.4;scene.fog.far=underwater?19:inventory.viewDistance-10;sky.position.copy(camera.position);renderer.render(scene,camera);inventory.afterRender()}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 31 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 31 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+function frame(){
+ requestAnimationFrame(frame);
+ const rawDt=clock.getDelta();
+ adaptResolution(rawDt);
+ const dt=Math.min(rawDt,.04);
+ update(dt);
+ updateCamera();
+ const {x,y,z}=camera.position;
+ ocean.follow(x,z,inventory.viewDistance-10);
+ const surface=seaLevel+waveHeight(x,z,ocean.time.value);
+ const threshold=ocean.submerged.value?.05:-.05;
+ const underwater=z<oceanBounds.shoreZ&&y<surface+threshold;
+ ocean.submerged.value=underwater;
+ if(blenderSea)blenderSea(dt,underwater);
+ else{
+  fallbackSea.visible=underwater;
+  if(underwater)animateSeaLife(ocean.time.value);
+ }
+ sky.visible=!underwater;
+ if(underwater)scene.background.setHex(0x0c3b68);
+ else scene.background.setRGB(...seaHorizon);
+ scene.fog.color.copy(scene.background);
+ scene.fog.near=underwater?1:inventory.viewDistance*.4;
+ scene.fog.far=underwater?28:inventory.viewDistance-10;
+ sky.position.copy(camera.position);
+ renderer.render(scene,camera);
+ inventory.afterRender();
+}
+frame();
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 32 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 32 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadWaterPark(scene).then(park=>{waterPark=park;renderer.shadowMap.needsUpdate=true}).catch(error=>console.warn('Could not load water park:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
