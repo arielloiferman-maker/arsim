@@ -6,6 +6,7 @@ import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.
 import {makeOcean, waveHeight, oceanBounds} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
 import {connectPlayers} from './online.js';
+import {loadWaterPark} from './water-park.js';
 import {loadFirstPersonFists, comboDuration} from './first-person.js';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
@@ -39,7 +40,7 @@ let yaw=0,pitch=0,health=100,blueScore=0,blackScore=0,keys={},locked=false,dragL
 const viewHand=new THREE.Group();const forearm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.48,5,8),skin),palm=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),skin);forearm.rotation.z=.62;forearm.position.set(.55,-.47,-.82);palm.position.set(.76,-.72,-.92);viewHand.add(forearm,palm);
 for(let i=0;i<4;i++){const knuckle=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),skin);knuckle.position.set(.66+i*.065,-.78,-1.02);viewHand.add(knuckle)}const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(.045,.13,4,7),skin);thumb.position.set(.88,-.73,-.96);thumb.rotation.z=-.8;viewHand.add(thumb);viewHand.visible=true;camera.add(viewHand);
 const leftHand=new THREE.Group(),leftArm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.48,5,8),skin),leftPalm=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),skin);leftArm.rotation.z=-.62;leftArm.position.set(-.48,-.49,-.82);leftPalm.position.set(-.68,-.73,-.94);leftHand.add(leftArm,leftPalm);for(let i=0;i<4;i++){const knuckle=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),skin);knuckle.position.set(-.58-i*.065,-.79,-1.03);leftHand.add(knuckle)}const leftThumb=new THREE.Mesh(new THREE.CapsuleGeometry(.045,.13,4,7),skin);leftThumb.position.set(-.82,-.74,-.98);leftThumb.rotation.z=.8;leftHand.add(leftThumb);camera.add(leftHand);
-let firstPersonFists=null;
+let firstPersonFists=null,thirdPerson=false,waterPark=null;
 const viewItem=new THREE.Group();
 camera.add(viewItem);
 function setViewItem(type){
@@ -63,7 +64,7 @@ function setViewItem(type){
  viewItem.add(item);
  viewItem.rotation.set(type==='umbrella'?0:.16,.18,.08);
 }
-document.addEventListener('keydown',e=>{keys[e.code]=true;if(skiRide&&rideModes[e.code]&&!e.repeat){skiRide.mode=rideModes[e.code];return}if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyV'&&!e.repeat){thirdPerson=!thirdPerson;return}if(skiRide&&rideModes[e.code]&&!e.repeat){skiRide.mode=rideModes[e.code];return}if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
 let firstLockedMove=false;
 const ridePitchMin=-.62,ridePitchMax=.22;
 function look(dx,dy,maxDelta){
@@ -123,6 +124,7 @@ function melee(){
  if(firstPersonFists&&!player.held){
   player.cool=comboDuration;
   firstPersonFists.punch(strike);
+  if(thirdPerson)startCrewBoxing(player);
   return;
  }
  player.cool=.38;
@@ -137,7 +139,7 @@ function throwSand(){
  player.cool=.55;
  punchT=.8;
  const direction=camera.getWorldDirection(new THREE.Vector3());
- const origin=camera.position.clone().addScaledVector(direction,.6);
+ const origin=attackOrigin().addScaledVector(direction,.6);
  const hitBots=new Set();
  for(let i=0;i<20;i++){
   const mesh=new THREE.Mesh(grainGeometry,grainMaterial);
@@ -167,7 +169,7 @@ function hitWithSand(particle){
  return false;
 }
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
-function throwItem(){if(skiRide)return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.position.copy(camera.position).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
+function throwItem(){if(skiRide)return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.visible=true;obj.position.copy(attackOrigin()).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
 function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;p.boxing=null;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
 function updateThrown(dt){
  for(let i=thrownObjects.length-1;i>=0;i--){
@@ -196,7 +198,8 @@ let slideRide=null;
 const rideModes={
  Digit1:{name:'ECO',speed:15,acceleration:2.2},
  Digit2:{name:'SPORT',speed:23,acceleration:2.5},
- Digit3:{name:'BOOST',speed:34,acceleration:3}
+ Digit3:{name:'BOOST',speed:34,acceleration:3},
+ Digit4:{name:'BOOST+',speed:55.6,acceleration:3.2}
 };
 const rideStatus=document.querySelector('#ride-status');
 let skiRide=null;
@@ -246,10 +249,10 @@ function useJetSki(){
  }
  const ski=resort.jetSkis.find(mesh=>mesh.position.distanceTo(player.g.position)<3);
  if(!ski)return false;
- skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false,crestReady:true,mode:rideModes.Digit1,steering:ski.getObjectByName('RiptideSteering')??null};
+ skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false,crestReady:true,sprayTime:0,rampHeight:0,mode:rideModes.Digit1,steering:ski.getObjectByName('RiptideSteering')??null};
  yaw=ski.rotation.y;
  pitch=-.15;
- say('1 אקו · 2 ספורט · 3 בוסט');
+ say('1 אקו · 2 ספורט · 3 בוסט · 4 בוסט פלוס');
  return true;
 }
 function updateJetSkis(dt){
@@ -276,9 +279,17 @@ function updateJetSkis(dt){
   if(ride.steering)ride.steering.rotation.y=THREE.MathUtils.damp(ride.steering.rotation.y,steer*.33,10,dt);
   ocean.wake.value.set(ski.position.x,ski.position.z,dx,dz);
   const crest=waveHeight(ski.position.x,ski.position.z,time);
+  const ramp=ride.lift===0?waterPark?.rampAt(ski,x,z):null;
+  ride.rampHeight=ramp?.height??0;
+  if(ramp?.launch){
+   ride.rampHeight=0;
+   ride.lift=Math.max(.01,.25+ramp.height-(ski.userData.waterY??.25+crest));
+   ride.verticalSpeed=clamp(2+ride.travelSpeed*.16,2,8);
+   ride.crestReady=false;
+  }
   if(crest<.12)ride.crestReady=true;
   const crestJump=ride.travelSpeed>11&&crest>.19&&ride.crestReady;
-  if(ride.lift===0&&ride.speed>0&&ride.travelSpeed>4&&(ride.jumpRequested||crestJump)){
+  if(!ramp&&ride.lift===0&&ride.speed>0&&ride.travelSpeed>4&&(ride.jumpRequested||crestJump)){
    ride.verticalSpeed=2.4+ride.speed*.14;
    ride.lift=.01;
    ride.crestReady=false;
@@ -290,10 +301,22 @@ function updateJetSkis(dt){
    if(ride.lift<=0){
     ride.lift=0;
     ride.verticalSpeed=0;
-    emitImpact(ski.position.clone(),0xd6f6ff,18);
+    const {x,z}=ski.position;
+    waterPark?.spray(x,.08+crest,z,ski.rotation.y,1.9,true);
+    waterPark?.spray(x,.08+crest,z,ski.rotation.y+Math.PI,1.65,true);
+    emitImpact(new THREE.Vector3(x,.08+crest,z),0xd6f6ff,18);
    }
   }
-  wakePower=ride.lift>0?0:Math.min(1,ride.travelSpeed/9);
+  if(ride.lift===0&&!ramp&&ride.travelSpeed>3){
+   ride.sprayTime-=dt;
+   if(ride.sprayTime<=0){
+    const rearX=ski.position.x-dx*1.45,rearZ=ski.position.z-dz*1.45;
+    const scale=clamp(.7+ride.travelSpeed*.025,.8,1.85);
+    waterPark?.spray(rearX,.08+waveHeight(rearX,rearZ,time),rearZ,ski.rotation.y,scale);
+    ride.sprayTime=.15-Math.min(ride.travelSpeed,55.6)*.0012;
+   }
+  }
+  wakePower=ride.lift>0||ramp?0:Math.min(1,ride.travelSpeed/9);
  }
  ocean.wakePower.value=THREE.MathUtils.damp(ocean.wakePower.value,wakePower,9,dt);
  for(const ski of resort.jetSkis){
@@ -307,10 +330,11 @@ function updateJetSkis(dt){
   }
   const waterY=.25+waveHeight(x,z,time);
   ski.userData.waterY=THREE.MathUtils.damp(ski.userData.waterY??waterY,waterY,9,dt);
-  ski.position.y=ski.userData.waterY+airborne;
+  const deckY=ridden&&skiRide.rampHeight>0?.25+skiRide.rampHeight:0;
+  ski.position.y=Math.max(ski.userData.waterY,deckY)+airborne;
   const dx=-Math.sin(ski.rotation.y),dz=-Math.cos(ski.rotation.y);
   const slope=waveHeight(x+dx,z+dz,time)-waveHeight(x-dx,z-dz,time);
-  const tilt=airborne>0?skiRide.verticalSpeed*.045:slope*.45;
+  const tilt=airborne>0?skiRide.verticalSpeed*.045:ridden&&skiRide.rampHeight>0?Math.atan(.2):slope*.45;
   ski.rotation.x=THREE.MathUtils.damp(ski.rotation.x,tilt,8,dt);
  }
  rideStatus.hidden=!skiRide;
@@ -417,6 +441,13 @@ function hitOnline(direction){
 }
 function animateBody(p,dt){if(animateCrew(p,dt))return;if(p.alive&&p.sandT>0){for(const arm of p.arms)arm.rotation.x=-1.5;return}p.gait=THREE.MathUtils.damp(p.gait??0,p.walking?1:0,9,dt);p.walkPhase+=dt*(2.2+7.8*p.gait);const stride=Math.sin(p.walkPhase)*.58*p.gait;p.legs[0].rotation.x=stride;p.legs[1].rotation.x=-stride;const armSwing=Math.sin(p.walkPhase)*.42*p.gait;p.arms[0].rotation.x=-armSwing;p.arms[1].rotation.x=armSwing;if(p.attackT>0){p.attackT=Math.max(0,p.attackT-dt);p.arms[1].rotation.x=-Math.sin(p.attackT/.32*Math.PI)*1.15}}
 const rideEye=new THREE.Vector3(0,1.38,.64);
+const shoulderOffset=new THREE.Vector3();
+function attackOrigin(){
+ if(!thirdPerson)return camera.position.clone();
+ const eye=player.g.position.clone();
+ eye.y+=1.68;
+ return eye;
+}
 function updateCamera(){
  if(skiRide){
   const ski=skiRide.mesh;
@@ -428,16 +459,36 @@ function updateCamera(){
   camera.position.y+=1.68;
   camera.rotation.set(pitch,yaw,0);
  }
+ if(thirdPerson){
+  const floor=camera.position.y-.55;
+  shoulderOffset.set(.58,.58,skiRide?5.4:3.6).applyQuaternion(camera.quaternion);
+  camera.position.add(shoulderOffset);
+  camera.position.y=Math.max(floor,camera.position.y);
+ }
 }
 camera.rotation.order='YXZ';
-const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+yaw;updateCamera();const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving;
-const showFists=Boolean(firstPersonFists&&player.alive&&!skiRide);
-viewItem.visible=Boolean(player.held&&player.alive&&!skiRide);
-if(viewItem.visible&&!showFists)viewItem.position.set(.82,-.66,-1.03);
-firstPersonFists?.update(dt,showFists,moving,punchT,viewItem.visible?viewItem:null);
-viewHand.visible=leftHand.visible=player.alive&&!showFists&&!skiRide;
+const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+(skiRide?.mesh.rotation.y??yaw);updateCamera();const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving&&!skiRide;
+if(player.character){
+ const {root}=player.character;
+ root.visible=thirdPerson;
+}
+if(player.heldProp)player.heldProp.mesh.visible=thirdPerson&&!skiRide;
+const useFists=Boolean(firstPersonFists&&player.alive&&!skiRide);
+viewItem.visible=Boolean(player.held&&player.alive&&!skiRide&&!thirdPerson);
+if(viewItem.visible&&!useFists)viewItem.position.set(.82,-.66,-1.03);
+firstPersonFists?.update(dt,useFists,moving,punchT,viewItem.visible?viewItem:null,!thirdPerson);
+viewHand.visible=leftHand.visible=player.alive&&!useFists&&!skiRide&&!thirdPerson;
 viewHand.rotation.x=-.32*punchT;viewHand.rotation.z=moving?Math.sin(performance.now()*.012)*.045:0;viewHand.position.z=-.38*punchT;viewHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012))*.035:0;leftHand.position.z=-.13*punchT;leftHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012+1))*.025:0;updateThrown(dt);
-camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);firstPersonFists?.ride(skiRide?.steering??null);updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
+camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);
+waterPark?.update(dt);
+firstPersonFists?.ride(thirdPerson?null:skiRide?.steering??null);
+if(player.character){
+ const root=player.character.root;
+ if(!root.userData.standingPosition)root.userData.standingPosition=root.position.clone();
+ root.position.copy(root.userData.standingPosition);
+ if(skiRide){root.position.y+=.87;root.position.z-=.54;}
+ root.rotation.z=skiRide?skiRide.mesh.rotation.z*.6:0;
+}updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
 for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}
 const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;
 if(p.boxing){
@@ -466,7 +517,8 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 26 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 26 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 27 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 27 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
+loadWaterPark(scene).then(park=>{waterPark=park;renderer.shadowMap.needsUpdate=true}).catch(error=>console.warn('Could not load water park:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});

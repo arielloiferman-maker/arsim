@@ -15,7 +15,7 @@ export async function loadCrew(){
 }
 
 export function attachCrew(person){
- if(!crew.length||person.character||person.isPlayer||person.team>1)return;
+ if(!crew.length||person.character||person.team>1)return;
  const asset=crew[(person.id-1)%crew.length];
  const model=clone(asset.scene);
  const bounds=new THREE.Box3().setFromObject(model,true);
@@ -38,10 +38,11 @@ export function attachCrew(person){
   if(part.isSkinnedMesh)part.frustumCulled=false;
  });
  for(const child of person.g.children)child.visible=false;
+ root.visible=!person.isPlayer;
  person.g.add(root);
  const mixer=new THREE.AnimationMixer(model);
  const actions=new Map(asset.animations.map(clip=>[clip.name,mixer.clipAction(clip)]));
- person.character={mixer,actions,current:null,remaining:0,punchSide:false};
+ person.character={root,mixer,actions,current:null,remaining:0,punchSide:false};
 }
 
 function play(character,name,once=false){

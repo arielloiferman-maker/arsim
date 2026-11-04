@@ -56,7 +56,7 @@ export async function loadFirstPersonFists(camera){
   return {bone,rest:bone.quaternion.clone()};
  });
  const palm=new THREE.Vector3();
- let heldItem=null,gripTime=0;
+ let heldItem=null,gripTime=0,wasActive=false;
  let action,nextContact,onContact;
  function play(){
   action?.stop();
@@ -82,10 +82,11 @@ export async function loadFirstPersonFists(camera){
    onContact=strike;
    play();
   },
-  update(dt,visible,moving,throwMotion,item=null){
-   if(!visible&&mount.visible)guard();
-   mount.visible=visible;
-   if(!visible)return;
+  update(dt,active,moving,throwMotion,item=null,showModel=true){
+   if(!active&&wasActive)guard();
+   wasActive=active;
+   mount.visible=active&&showModel;
+   if(!active)return;
    if(item!==heldItem){
     if(item)guard();
     heldItem=item;
