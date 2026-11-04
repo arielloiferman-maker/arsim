@@ -96,7 +96,7 @@ function say(message){notice.textContent=message;notice.style.opacity='1';clearT
 function pickup(){if(player.held){say('כבר יש לך חפץ ביד');return}let nearest=null,d=4.8;for(const q of props)if(!q.taken){let n=q.mesh.position.distanceTo(player.g.position);if(n<d){nearest=q;d=n}}if(!nearest){say('התקרב לחפץ ולחץ E');return}nearest.taken=true;player.held=nearest.type;player.heldProp=nearest;player.g.add(nearest.mesh);nearest.mesh.position.set(.48,1.18,-.38);nearest.mesh.rotation.set(.3,.5,.5);setViewItem(player.held);heldText.textContent=`❤️ ${health}　|　${icon(player.held)} ביד`;say(`${icon(player.held)} נאסף!`)}
 function icon(t){return {cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
 function melee(){
- if(!player.alive||player.cool>0)return;
+ if(skiRide||!player.alive||player.cool>0)return;
  if(firstPersonFists&&!player.held){
   player.cool=comboDuration;
   firstPersonFists.punch(strike);
@@ -110,7 +110,7 @@ function strike(){const v=new THREE.Vector3();camera.getWorldDirection(v);v.y=0;
 const grainGeometry=new THREE.SphereGeometry(.06,5,4);
 const grainMaterial=mat(0xf1d497);
 function throwSand(){
- if(!player.alive||player.cool>0)return;
+ if(skiRide||!player.alive||player.cool>0)return;
  player.cool=.55;
  punchT=.8;
  const direction=camera.getWorldDirection(new THREE.Vector3());
@@ -144,7 +144,7 @@ function hitWithSand(particle){
  return false;
 }
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
-function throwItem(){if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.position.copy(camera.position).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
+function throwItem(){if(skiRide)return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.position.copy(camera.position).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
 function damage(p,n,from){p.hp-=n;p.stun=.32;p.hitT=.2;p.g.rotation.x=-.16;p.g.scale.set(1.18,.78,1.18);if(from){const push=p.g.position.clone().sub(from);push.y=0;if(push.lengthSq())p.g.position.addScaledVector(push.normalize(),.22)}p.g.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){o.material.emissive.setHex(0x772222);setTimeout(()=>o.material.emissive.setHex(0),180)}});emitImpact(p.g.position.clone().add(new THREE.Vector3(0,1.15,0)),0xffd078,10);if(p===player){health=Math.max(0,p.hp);heldText.textContent=`❤️ ${Math.ceil(health)}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;const flash=document.querySelector('#damageFlash');flash.style.opacity='.9';setTimeout(()=>flash.style.opacity='0',180)}if(p.hp<=0){if(p.team===1&&from===player.g.position){credits+=25;showShop()}p.alive=false;p.boxing=null;if(crewFall(p)){setTimeout(()=>{if(!p.alive)p.g.visible=false},1350)}else p.g.visible=false;if(p.team===0)blackScore++;else blueScore++;document.querySelector('#score').textContent=`🔵 ${blueScore}　—　${blackScore} ⚫`;setTimeout(()=>{p.hp=100;p.alive=true;p.g.visible=true;p.g.position.set(Math.random()*14-7,0,p.team===0?13:-11);p.g.scale.set(1,1,1);p.g.rotation.x=0;p.hitT=0;p.sandT=0;if(p===player){health=100;heldText.textContent='❤️ 100　|　🧺 אין חפץ'}},5500)}}
 function updateThrown(dt){
  for(let i=thrownObjects.length-1;i>=0;i--){
@@ -217,8 +217,9 @@ function useJetSki(){
  }
  const ski=resort.jetSkis.find(mesh=>mesh.position.distanceTo(player.g.position)<3);
  if(!ski)return false;
- skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false};
+ skiRide={mesh:ski,speed:0,lift:0,verticalSpeed:0,jumpRequested:false,steering:ski.getObjectByName('RiptideSteering')??null};
  yaw=ski.rotation.y;
+ pitch=-.15;
  say('W גז · S בלימה · A/D היגוי');
  return true;
 }
@@ -240,6 +241,7 @@ function updateJetSkis(dt){
   ski.position.x=clamp(ski.position.x+dx*ride.speed*dt,-80,80);
   ski.position.z=clamp(ski.position.z+dz*ride.speed*dt,-130,-19.1);
   ski.rotation.z=THREE.MathUtils.damp(ski.rotation.z,-steer*ride.speed*.021,5,dt);
+  if(ride.steering)ride.steering.rotation.y=THREE.MathUtils.damp(ride.steering.rotation.y,steer*.33,10,dt);
   ocean.wake.value.set(ski.position.x,ski.position.z,dx,dz);
   const crest=waveHeight(ski.position.x,ski.position.z,time);
   if(ride.lift===0&&ride.speed>4&&(ride.jumpRequested||(ride.speed>11&&crest>.19))){
@@ -260,7 +262,13 @@ function updateJetSkis(dt){
  }
  for(const ski of resort.jetSkis){
   const {x,z}=ski.position;
-  const airborne=skiRide?.mesh===ski?skiRide.lift:0;
+  const ridden=skiRide?.mesh===ski;
+  const airborne=ridden?skiRide.lift:0;
+  if(!ridden){
+   ski.rotation.z=THREE.MathUtils.damp(ski.rotation.z,0,5,dt);
+   const steering=ski.getObjectByName('RiptideSteering');
+   if(steering)steering.rotation.y=THREE.MathUtils.damp(steering.rotation.y,0,10,dt);
+  }
   ski.position.y=.25+waveHeight(x,z,time)+airborne;
   ski.rotation.x=(waveHeight(x,z+1,time)-waveHeight(x,z-1,time))*.55
    +(airborne>0?skiRide.verticalSpeed*.045:0);
@@ -361,12 +369,25 @@ function hitOnline(direction){
  return false;
 }
 function animateBody(p,dt){if(animateCrew(p,dt))return;if(p.alive&&p.sandT>0){for(const arm of p.arms)arm.rotation.x=-1.5;return}p.gait=THREE.MathUtils.damp(p.gait??0,p.walking?1:0,9,dt);p.walkPhase+=dt*(2.2+7.8*p.gait);const stride=Math.sin(p.walkPhase)*.58*p.gait;p.legs[0].rotation.x=stride;p.legs[1].rotation.x=-stride;const armSwing=Math.sin(p.walkPhase)*.42*p.gait;p.arms[0].rotation.x=-armSwing;p.arms[1].rotation.x=armSwing;if(p.attackT>0){p.attackT=Math.max(0,p.attackT-dt);p.arms[1].rotation.x=-Math.sin(p.attackT/.32*Math.PI)*1.15}}
-const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+yaw;camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0);const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving;
-const showFists=Boolean(firstPersonFists&&player.alive&&!player.held);
+const rideEye=new THREE.Vector3(0,1.38,.64);
+function updateCamera(){
+ if(skiRide){
+  const ski=skiRide.mesh;
+  ski.localToWorld(camera.position.copy(rideEye));
+  camera.rotation.set(pitch+ski.rotation.x*.6,yaw,ski.rotation.z*.65);
+ }else{
+  camera.position.copy(player.g.position);
+  camera.position.y+=1.68;
+  camera.rotation.set(pitch,yaw,0);
+ }
+}
+camera.rotation.order='YXZ';
+const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+yaw;updateCamera();const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving;
+const showFists=Boolean(firstPersonFists&&player.alive&&!player.held&&!skiRide);
 firstPersonFists?.update(dt,showFists,moving,punchT);
-viewHand.visible=leftHand.visible=player.alive&&!showFists;
+viewHand.visible=leftHand.visible=player.alive&&!showFists&&!skiRide;
 viewHand.rotation.x=-.32*punchT;viewHand.rotation.z=moving?Math.sin(performance.now()*.012)*.045:0;viewHand.position.z=-.38*punchT;viewHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012))*.035:0;leftHand.position.z=-.13*punchT;leftHand.position.y=moving?Math.abs(Math.sin(performance.now()*.012+1))*.025:0;updateThrown(dt);
-camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
+camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,0).applyQuaternion(camera.quaternion);right.y=0;right.normalize();const move=new THREE.Vector3();if(keys[controls.forward])move.add(forward);if(keys[controls.back])move.sub(forward);if(keys[controls.right])move.add(right);if(keys[controls.left])move.sub(right);if(move.lengthSq())move.normalize().multiplyScalar((keys.ShiftLeft?7.3:4.8)*dt);updateTraversal(move,dt);firstPersonFists?.ride(skiRide?.steering??null);updateOnline(dt);const diving=camera.position.y<.15;if(blenderSea)blenderSea(dt,diving);else {fallbackSea.visible=diving;if(diving)animateSeaLife(ocean.time.value);}
 for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/.2;p.g.scale.set(1+.18*k,1-.22*k,1+.18*k);p.g.rotation.x=-.16*k}else{p.g.scale.set(1,1,1);p.g.rotation.x=0}animateBody(p,dt);if(!p.bot||!p.alive)continue;if(p.stroll){const route=p.stroll;route.phase+=dt*.38;const x=route.x+Math.cos(route.phase)*3,z=route.z+Math.sin(route.phase)*2;p.g.rotation.y=Math.atan2(x-p.g.position.x,z-p.g.position.z);p.g.position.set(x,Math.abs(Math.sin(p.walkPhase))*.028,z);p.walking=true;continue}p.cool-=dt;p.stun=Math.max(0,p.stun-dt);if(p.sandT>0){p.sandT=Math.max(0,p.sandT-dt);continue}
 const inArena=player.alive&&Math.abs(player.g.position.x)<10&&player.g.position.z>-9&&player.g.position.z<10;
 if(p.boxing){
@@ -394,8 +415,8 @@ if(p.stun>0){p.walking=false;continue}const enemies=inArena?people.filter(q=>q.t
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
-function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 21 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 21 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 22 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 22 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});

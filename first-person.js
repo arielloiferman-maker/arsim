@@ -1,20 +1,49 @@
 import * as THREE from 'three';
 import {loadModel} from './model-loader.js';
+import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import fistsAsset from './characters/fists.glb';
 
 export const comboDuration = 2.5;
 // Blender markers at frames 15, 26 and 39, with the exported clip starting at frame 1.
 const contactTimes = [14/30,25/30,38/30];
 
+function poseBone(bone,position,direction){
+ const y=direction.normalize();
+ const x=y.clone().cross(new THREE.Vector3(0,1,0)).normalize();
+ const z=x.clone().cross(y);
+ const pose=new THREE.Matrix4().makeBasis(x,y,z).setPosition(position);
+ bone.parent.updateWorldMatrix(true,false);
+ pose.premultiply(bone.parent.matrixWorld.clone().invert());
+ pose.decompose(bone.position,bone.quaternion,bone.scale);
+}
+
+function gripHandlebars(arms,steering){
+ arms.removeFromParent();
+ for(const [hand,gripName] of [['L','starboard'],['R','port']]){
+  const grip=steering.getObjectByName('RiptideGrip_'+gripName).position;
+  const side=Math.sign(grip.x);
+  const wrist=grip.clone().add(new THREE.Vector3(side*.012,.032,-.075));
+  const direction=new THREE.Vector3(side*.11,.18,1).normalize();
+  const elbow=wrist.clone().addScaledVector(direction,-.42);
+  poseBone(arms.getObjectByName('Forearm'+hand),elbow,direction);
+  poseBone(arms.getObjectByName('Fist'+hand),wrist,new THREE.Vector3(-side*.12,-.12,1));
+ }
+ steering.add(arms);
+}
+
 export async function loadFirstPersonFists(camera){
  const {scene:model,cameras,animations}=await loadModel(fistsAsset);
  const combo=THREE.AnimationClip.findByName(animations,'FPS | Three Punch Combo');
  if(!cameras[0]||!combo)throw new Error('First-person rig is incomplete');
  model.updateMatrixWorld(true);
- model.matrix.copy(cameras[0].matrixWorldInverse);
- model.matrixAutoUpdate=false;
+ const cameraTransform=cameras[0].matrixWorldInverse.clone();
  cameras[0].removeFromParent();
- model.traverse(part=>{if(part.isSkinnedMesh)part.frustumCulled=false;});
+ const ridingArms=clone(model);
+ model.matrix.copy(cameraTransform);
+ model.matrixAutoUpdate=false;
+ for(const arms of [model,ridingArms]){
+  arms.traverse(part=>{if(part.isSkinnedMesh)part.frustumCulled=false;});
+ }
  const mount=new THREE.Group();
  mount.visible=false;
  mount.add(model);
@@ -36,6 +65,11 @@ export async function loadFirstPersonFists(camera){
  }
  guard();
  return {
+  ride(steering){
+   if(steering===ridingArms.parent)return;
+   if(steering)gripHandlebars(ridingArms,steering);
+   else ridingArms.removeFromParent();
+  },
   punch(strike){
    nextContact=0;
    onContact=strike;
