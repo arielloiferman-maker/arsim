@@ -43,10 +43,11 @@ let firstPersonFists=null;
 function setViewItem(type){if(viewHand.userData.heldModel){viewHand.remove(viewHand.userData.heldModel);viewHand.userData.heldModel=null}if(!type)return;let item;if(type==='umbrella'){item=new THREE.Group();let pole=new THREE.Mesh(new THREE.CylinderGeometry(.04,.06,1.3,8),wood),top=new THREE.Mesh(new THREE.ConeGeometry(.62,.18,8),red);pole.position.y=.45;top.position.y=1.08;item.add(pole,top)}else{item=['cooler','surfboard'].includes(type)?player.heldProp.mesh.clone(true):makeObject(type);if(['blanket','chair','paddle','surfboard'].includes(type))item.scale.setScalar(.55);else item.scale.setScalar(.75)}item.position.set(.92,-.83,-1.03);item.rotation.set(.25,.5,.25);viewHand.add(item);viewHand.userData.heldModel=item}
 document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
 let firstLockedMove=false;
+const ridePitchMin=-.45,ridePitchMax=.22;
 function look(dx,dy,maxDelta){
  if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.max(Math.abs(dx),Math.abs(dy))>maxDelta)return;
  yaw=THREE.MathUtils.euclideanModulo(yaw-dx*.0024+Math.PI,2*Math.PI)-Math.PI;
- pitch=clamp(pitch-dy*.0019,-.72,.72);
+ pitch=clamp(pitch-dy*.0019,skiRide?ridePitchMin:-.72,skiRide?ridePitchMax:.72);
 }
 async function requestMouseLock(){
  const canvas=renderer.domElement;
@@ -374,7 +375,8 @@ function updateCamera(){
  if(skiRide){
   const ski=skiRide.mesh;
   ski.localToWorld(camera.position.copy(rideEye));
-  camera.rotation.set(pitch+ski.rotation.x*.6,yaw,ski.rotation.z*.65);
+  const ridePitch=clamp(pitch+ski.rotation.x*.6,ridePitchMin,ridePitchMax);
+  camera.rotation.set(ridePitch,yaw,ski.rotation.z*.65);
  }else{
   camera.position.copy(player.g.position);
   camera.position.y+=1.68;
@@ -416,7 +418,7 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 22 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 22 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 23 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 23 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
