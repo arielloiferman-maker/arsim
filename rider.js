@@ -62,16 +62,19 @@ export function poseRider(player,ride){
  if(root.parent!==mesh)mesh.add(root);
  for(const [bone,rest] of pose.joints)bone.quaternion.copy(rest);
  const steer=steering?.rotation.y??0;
- root.rotation.set(.32+Math.min(.1,(ride.travelSpeed??0)*.001),Math.PI+steer*.55,0,'YXZ');
+ const progress=ride.flightDuration?THREE.MathUtils.clamp(ride.flightTime/ride.flightDuration,0,1):0;
+ const jumpFlex=Math.sin(progress*Math.PI);
+ const compression=ride.landingCompression??0;
+ root.rotation.set(.32+Math.min(.1,(ride.travelSpeed??0)*.001)+jumpFlex*.07+compression*.05,Math.PI+steer*.55,0,'YXZ');
  root.position.set(0,0,0);
  pose.pelvis.getWorldPosition(hip);
  mesh.worldToLocal(hip);
- seat.set(0,.72,.15);
+ seat.set(0,.72+jumpFlex*.09-compression*.13,.15);
  root.position.copy(seat.sub(hip));
  mesh.getWorldQuaternion(tilt);
  for(const [index,{arm,leg}] of pose.sides.entries()){
   const side=index===0?1:-1;
-  mesh.localToWorld(target.set(side*.35,.43,.34));
+  mesh.localToWorld(target.set(side*.35,.43+jumpFlex*.025,.34));
   bendDirection.set(side*.22,.22,-1).applyQuaternion(tilt);
   poseLimb(leg,target,bendDirection);
   leg[2].getWorldPosition(target).add(bendDirection.set(0,-.24,-1).applyQuaternion(tilt));

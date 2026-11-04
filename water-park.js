@@ -30,6 +30,12 @@ const freeHoops=Array.from({length:42},(_,i)=>[
  i%3===0?5:1.65,
  Math.sin(i*.43)*.65
 ]);
+// Wildlife uses its own distribution, independent of the stunt course.
+const dolphinWaters=Array.from({length:169},(_,i)=>[
+ (i%13-6)*270+Math.sin(i*1.91)*32,
+ -78-Math.floor(i/13)*286+Math.cos(i*1.37)*18,
+ Math.sin(i*.73)*Math.PI
+]);
 
 export async function loadWaterPark(scene){
  const [ramp,spray,dolphin,buoy,jump,shark,fish,hoop]=await Promise.all(
@@ -59,6 +65,12 @@ export async function loadWaterPark(scene){
    ring.scale.setScalar(1.3);
    scene.add(ring);
    hoops.push(ring);
+   const second=hoop.scene.clone();
+   model.localToWorld(second.position.set(0,rampRise+.6/height,-18));
+   second.rotation.y=yaw;
+   second.scale.setScalar(1.45);
+   scene.add(second);
+   hoops.push(second);
   }
   return model;
  });
@@ -83,14 +95,29 @@ export async function loadWaterPark(scene){
   return {model,mixer,splash,body:model.children[0],wasAbove:false};
  }
  const animals=[];
+ [...dolphinLocations,...dolphinWaters].forEach(([x,z,yaw],i)=>{
+  animals.push(swimmer(dolphin,x,z,yaw,i*.413,.9+(i%4)*.08,true));
+ });
  const wildlifeLocations=[...dolphinLocations,...seaRoutes.map(([x,z,yaw])=>[x+28,z-15,yaw])];
  wildlifeLocations.forEach(([x,z,yaw],i)=>{
-  animals.push(swimmer(dolphin,x,z,yaw,i*.47,1,true));
   if(i%2===0)animals.push(swimmer(shark,x+16,z-12,yaw-.85,i*.68,1.05,true));
   for(let j=0;j<4;j++){
    animals.push(swimmer(fish,x-8+j*.8,z+5+j*.65,yaw+.3,i*.37+j*.065,.75+j*.12,j===0));
   }
  });
+ const mist=new THREE.InstancedMesh(
+  new THREE.IcosahedronGeometry(1,0),
+  new THREE.MeshStandardMaterial({color:0xc3f4ff,roughness:.24,metalness:.05}),
+  192
+ );
+ mist.frustumCulled=false;
+ const mistState=Array.from({length:192},()=>({position:new THREE.Vector3(),velocity:new THREE.Vector3(),life:0}));
+ const mistTransform=new THREE.Object3D();
+ mistTransform.scale.setScalar(0);
+ mistTransform.updateMatrix();
+ for(let i=0;i<192;i++)mist.setMatrixAt(i,mistTransform.matrix);
+ scene.add(mist);
+ let nextMist=0;
  const pool=Array.from({length:16},()=>{
   const model=spray.scene.clone();
   const mixer=new THREE.AnimationMixer(model);
@@ -140,6 +167,15 @@ export async function loadWaterPark(scene){
    return false;
   },
   spray(x,y,z,yaw,scale,burst=false,stretch=1){
+   for(let i=0;i<(burst?14:6);i++){
+    const drop=mistState[nextMist];
+    nextMist=(nextMist+1)%mistState.length;
+    const speed=(burst?3:2.5+stretch*.65)*(1+Math.random()*.5);
+    const angle=yaw+(Math.random()-.5)*(burst?Math.PI*2:.48);
+    drop.position.set(x,y+.06,z);
+    drop.velocity.set(Math.sin(angle)*speed,1.6+Math.random()*3.1,Math.cos(angle)*speed);
+    drop.life=.5+Math.random()*.35;
+   }
    const plume=pool[next];
    next=(next+1)%pool.length;
    plume.model.position.set(x,y,z);
@@ -150,13 +186,13 @@ export async function loadWaterPark(scene){
    for(const action of plume.actions)action.reset().setLoop(THREE.LoopOnce,1).play();
    plume.mixer.update(0);
   },
-  update(dt,viewer){
+  update(dt,viewer,viewDistance=220){
    for(const model of scenery){
-    model.visible=model.position.distanceToSquared(viewer)<180**2;
+    model.visible=model.position.distanceToSquared(viewer)<viewDistance**2;
    }
    for(const animal of animals){
     const {model,mixer,body,splash}=animal;
-    model.visible=model.position.distanceToSquared(viewer)<140**2;
+    model.visible=model.position.distanceToSquared(viewer)<viewDistance**2;
     if(!model.visible)continue;
     mixer.update(dt);
     if(splash&&body){
@@ -166,6 +202,22 @@ export async function loadWaterPark(scene){
      animal.wasAbove=above;
     }
    }
+   let mistMoved=false;
+   for(const [i,drop] of mistState.entries()){
+    if(!drop.life)continue;
+    mistMoved=true;
+    drop.life=Math.max(0,drop.life-dt);
+    if(drop.life){
+     drop.velocity.y-=9.8*dt;
+     drop.position.addScaledVector(drop.velocity,dt);
+    }
+    mistTransform.position.copy(drop.position);
+    const size=drop.life>0?.018+drop.life*.035:0;
+    mistTransform.scale.set(size,size*1.8,size);
+    mistTransform.updateMatrix();
+    mist.setMatrixAt(i,mistTransform.matrix);
+   }
+   if(mistMoved)mist.instanceMatrix.needsUpdate=true;
    for(const plume of pool){
     if(!plume.model.visible)continue;
     plume.remaining-=dt;

@@ -21,6 +21,7 @@ export function makeOcean(scene) {
   sunTint:{value:new THREE.Color(...look.sunColor)},
   sunDirection:{value:new THREE.Vector3(...look.sunDirection)},
   roughness:{value:.115},
+  visibility:{value:210},
   normalMap:{value:flatNormal},detailMap:{value:flatRoughness}
  };
  loadModel(materialAsset).then(asset=>{
@@ -54,6 +55,7 @@ export function makeOcean(scene) {
    uniform float wakePower;
    uniform vec3 seaTint,skyTint,sunTint,sunDirection;
    uniform float roughness;
+   uniform float visibility;
    uniform sampler2D normalMap,detailMap;
    varying vec3 waterPoint;
    void main(){
@@ -91,7 +93,7 @@ export function makeOcean(scene) {
     float crestFoam=clamp((texture2D(detailMap,uv).g-.105)/.46,0.,1.);
     foam=max(foam,crestFoam*smoothstep(.13,.26,waterPoint.y)*.25);
     color=mix(color,vec3(.8,.95,.91),clamp(foam,0.,.87));
-    float fog=smoothstep(48.,115.,distance(cameraPosition,waterPoint));
+    float fog=smoothstep(visibility*.42,visibility,distance(cameraPosition,waterPoint));
     if(cameraPosition.y<0.)color=mix(vec3(.075,.48,.56),vec3(.55,.82,.80),foam*.55+glints*.20);
     gl_FragColor=vec4(mix(color,skyTint,fog),1.);
     #include <tonemapping_fragment>
@@ -104,9 +106,12 @@ export function makeOcean(scene) {
  sea.position.set(0,.08,-200);
  sea.frustumCulled=false;
  scene.add(sea);
- uniforms.follow=(x,z)=>{
+ uniforms.follow=(x,z,viewDistance=210)=>{
+  const scale=Math.max(1,viewDistance/230);
+  sea.scale.set(scale,scale,1);
   sea.position.x=Math.floor(x/10)*10;
   sea.position.z=Math.floor(z/10)*10;
+  uniforms.visibility.value=viewDistance;
  };
  return uniforms;
 }
