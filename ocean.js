@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import look from './blender-look.json';
 
 export function waveHeight(x,z,t) {
  return .16*Math.sin(z*1.15+t*1.65+.55*Math.sin(x*.17))
@@ -7,7 +8,12 @@ export function waveHeight(x,z,t) {
 
 export function makeOcean(scene) {
  const uniforms={
-  time:{value:0}, wake:{value:new THREE.Vector4(0,0,0,1)}, wakePower:{value:0}
+  time:{value:0}, wake:{value:new THREE.Vector4(0,0,0,1)}, wakePower:{value:0},
+  seaTint:{value:new THREE.Color(...look.waterColor)},
+  skyTint:{value:new THREE.Color(...look.worldColor)},
+  sunTint:{value:new THREE.Color(...look.sunColor)},
+  sunDirection:{value:new THREE.Vector3(...look.sunDirection)},
+  roughness:{value:look.waterRoughness}
  };
  const material=new THREE.ShaderMaterial({
   uniforms,
@@ -26,6 +32,8 @@ export function makeOcean(scene) {
    uniform float time;
    uniform vec4 wake;
    uniform float wakePower;
+   uniform vec3 seaTint,skyTint,sunTint,sunDirection;
+   uniform float roughness;
    varying vec3 waterPoint;
    void main(){
     vec2 p=waterPoint.xz;
@@ -37,12 +45,11 @@ export function makeOcean(scene) {
     vec3 normal=normalize(vec3(-.15*cos(p.x*.73+p.y*.44-time*1.2),1.,-.22*surfaceSlope+.13*ripples));
     vec3 viewDir=normalize(cameraPosition-waterPoint);
     float fresnel=pow(1.-max(0.,dot(viewDir,normal)),4.);
-    vec3 sunDir=normalize(vec3(-.47,.14,-.9));
-    float reflection=pow(max(0.,dot(reflect(-sunDir,normal),viewDir)),45.);
-    vec3 color=mix(vec3(.075,.62,.67),vec3(.018,.24,.40),smoothstep(0.,37.,depth));
+    float reflection=pow(max(0.,dot(reflect(-normalize(sunDirection),normal),viewDir)),mix(110.,18.,roughness));
+    vec3 color=mix(seaTint*vec3(2.15,1.36,1.08),seaTint*.59,smoothstep(0.,37.,depth));
     color+=vec3(.06,.14,.16)*swell*.32+vec3(.24,.34,.35)*glints*.45;
-    color=mix(color,vec3(.49,.61,.70),fresnel*.49);
-    color+=vec3(1.,.75,.45)*reflection*.62;
+    color=mix(color,skyTint,fresnel*.58);
+    color+=sunTint*reflection*.75;
     float foam=(1.-smoothstep(.06,2.1,depth))*smoothstep(.22,.86,swell+.38*ripples);
     vec2 d=p-wake.xy;
     float behind=-dot(d,wake.zw), side=abs(d.x*wake.w-d.y*wake.z);
@@ -51,7 +58,9 @@ export function makeOcean(scene) {
     color=mix(color,vec3(.8,.95,.91),clamp(foam,0.,.87));
     float fog=smoothstep(48.,115.,distance(cameraPosition,waterPoint));
     if(cameraPosition.y<0.)color=mix(vec3(.075,.48,.56),vec3(.55,.82,.80),foam*.55+glints*.20);
-    gl_FragColor=vec4(mix(color,vec3(.60,.70,.76),fog),1.);
+    gl_FragColor=vec4(mix(color,skyTint,fog),1.);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
    }`
  });
  const sea=new THREE.Mesh(new THREE.PlaneGeometry(340,180,170,100),material);

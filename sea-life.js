@@ -1,4 +1,5 @@
 import * as T from 'three';
+import look from './blender-look.json';
 
 export function addSeaLife(scene) {
  const life=[];
@@ -51,17 +52,21 @@ export function textureSand(material){
 }
 
 export function sunsetSky(scene){
+ const [r,g,b]=look.worldColor;
  const sky=new T.Mesh(new T.SphereGeometry(145,32,16),new T.ShaderMaterial({
   side:T.BackSide,depthWrite:false,
+  uniforms:{worldTint:{value:new T.Color(r,g,b)},sunDirection:{value:new T.Vector3(...look.sunDirection)}},
   vertexShader:`varying vec3 ray;void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-  fragmentShader:`varying vec3 ray;void main(){
+  fragmentShader:`varying vec3 ray;uniform vec3 worldTint;uniform vec3 sunDirection;void main(){
    vec3 d=normalize(ray);
-   vec3 c=mix(vec3(.97,.68,.45),vec3(.27,.43,.62),smoothstep(-.08,.66,d.y));
+   vec3 c=mix(mix(worldTint,vec3(.73,.54,.40),.43),worldTint*.76,smoothstep(-.08,.66,d.y));
    float clouds=sin(d.x*17.+d.y*31.)*sin(d.z*12.-d.y*51.)+sin(d.x*37.+d.z*38.)*.34;
    c=mix(c,vec3(.78,.63,.62),smoothstep(.25,.94,clouds)*smoothstep(.02,.12,d.y)*.55);
-   float sun=max(0.,dot(d,normalize(vec3(-.47,.10,-.9))));
+   float sun=max(0.,dot(d,normalize(sunDirection)));
    c+=vec3(.40,.25,.08)*pow(sun,22.)+vec3(.62,.50,.24)*smoothstep(.9993,.9998,sun);
    gl_FragColor=vec4(c,1.);
+   #include <tonemapping_fragment>
+   #include <colorspace_fragment>
   }`
  }));
  sky.renderOrder=-1000;
@@ -83,4 +88,5 @@ export function addWetSand(scene, sand) {
  const mat=new T.MeshStandardMaterial({color:0xa98366,roughness:.38,side:T.DoubleSide});
  const shore=new T.Mesh(geo,mat);
  shore.receiveShadow=true;scene.add(shore);
+ return shore;
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {loadModel} from './model-loader.js';
 import coast from './coast.blend.glb';
 import marine from './marine.blend.glb';
+import terrain from './terrain.blend.glb';
 
 const templates=new Map();
 export function blenderProp(type){
@@ -10,7 +11,7 @@ export function blenderProp(type){
 }
 
 export async function installBlenderWorld(scene,resort,props){
- const [town,seaLife]=await Promise.all([loadModel(coast),loadModel(marine)]);
+ const [town,seaLife,shore]=await Promise.all([loadModel(coast),loadModel(marine),loadModel(terrain)]);
  const marked=[];
  town.scene.traverse(node=>{
   if(node.isMesh)node.castShadow=node.receiveShadow=true;
@@ -25,7 +26,13 @@ export async function installBlenderWorld(scene,resort,props){
   if(outdated.has(props[i].mesh)&&!props[i].taken)props.splice(i,1);
  }
  if(resort.layout)scene.remove(resort.layout);
- scene.add(town.scene,seaLife.scene);
+ shore.scene.traverse(node=>{
+  if(!node.isMesh)return;
+  node.receiveShadow=true;
+  if(node.material.map)node.material.map.anisotropy=4;
+  if(node.material.normalMap)node.material.normalMap.anisotropy=4;
+ });
+ scene.add(town.scene,seaLife.scene,shore.scene);
  town.scene.updateMatrixWorld(true);
  const skis=[];
  const added=new Set();

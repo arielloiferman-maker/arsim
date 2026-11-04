@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {loadCrew, attachCrew, animateCrew, crewFall} from './crew.js';
 import {installBlenderWorld, blenderProp} from './blender-world.js';
+import blenderLook from './blender-look.json';
 import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.js';
 import {makeOcean, waveHeight} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
@@ -8,13 +9,13 @@ import {connectPlayers} from './online.js';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
 const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,180);camera.position.set(0,2,0);scene.add(camera);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));renderer.shadowMap.enabled=true;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;document.querySelector('#game').appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xc9f5ff,0xa47445,2));const sun=new THREE.DirectionalLight(0xffd29d,2.5);sun.position.set(-28,19,-15);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));renderer.shadowMap.enabled=true;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=2**blenderLook.exposure;document.querySelector('#game').appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(new THREE.Color(...blenderLook.worldColor),0xa47445,blenderLook.worldStrength*2.4));const sun=new THREE.DirectionalLight(new THREE.Color(...blenderLook.sunColor),blenderLook.sunEnergy);sun.position.set(...blenderLook.sunDirection).multiplyScalar(42);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
 const mat=(c,r=.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe8c887),water=new THREE.MeshPhysicalMaterial({color:0x159dc4,roughness:.14,metalness:.1,transparent:true,opacity:.86}),foam=mat(0xd8fbf2),red=mat(0xe8733d),navy=mat(0x263849),white=mat(0xf3f0dc),black=mat(0x22252c),skin=mat(0xd6a478),darkSkin=mat(0x956344),plastic=mat(0xf4d748,.45),pink=mat(0xff65a5),glass=new THREE.MeshPhysicalMaterial({color:0x4dc4a1,roughness:.05,transparent:true,opacity:.72}),wood=mat(0xc69656);
 const plane=new THREE.Mesh(new THREE.PlaneGeometry(10000,10000),sand);plane.rotation.x=-Math.PI/2;plane.position.set(0,-.08,4981);plane.receiveShadow=true;scene.add(plane);
 const ocean=makeOcean(scene);const sky=sunsetSky(scene);
 const fallbackSea=new THREE.Group();scene.add(fallbackSea);const animateSeaLife=addSeaLife(fallbackSea);let blenderSea=null;
-textureSand(sand);addWetSand(scene);
+textureSand(sand);const fallbackWetSand=addWetSand(scene);
 const seabed=new THREE.Mesh(new THREE.PlaneGeometry(340,180),sand);
 seabed.rotation.x=-Math.PI/2;seabed.position.set(0,-5,-109);scene.add(seabed);
 const umbrella=(x,z,color,sc=1)=>{const g=parasol(color);g.position.set(x,0,z);g.scale.setScalar(sc);scene.add(g);return g};
@@ -259,7 +260,7 @@ for(const p of people){if(p.hitT>0){p.hitT=Math.max(0,p.hitT-dt);const k=p.hitT/
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
-function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;scene.background.setHex(underwater?0x276d7c:0x98b3c2);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 14 · סצנת Blender נטענה";blenderSea=tick;scene.remove(fallbackSea);renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 14 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 15 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 15 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
