@@ -42,9 +42,56 @@ const leftHand=new THREE.Group(),leftArm=new THREE.Mesh(new THREE.CapsuleGeometr
 let firstPersonFists=null;
 function setViewItem(type){if(viewHand.userData.heldModel){viewHand.remove(viewHand.userData.heldModel);viewHand.userData.heldModel=null}if(!type)return;let item;if(type==='umbrella'){item=new THREE.Group();let pole=new THREE.Mesh(new THREE.CylinderGeometry(.04,.06,1.3,8),wood),top=new THREE.Mesh(new THREE.ConeGeometry(.62,.18,8),red);pole.position.y=.45;top.position.y=1.08;item.add(pole,top)}else{item=['cooler','surfboard'].includes(type)?player.heldProp.mesh.clone(true):makeObject(type);if(['blanket','chair','paddle','surfboard'].includes(type))item.scale.setScalar(.55);else item.scale.setScalar(.75)}item.position.set(.92,-.83,-1.03);item.rotation.set(.25,.5,.25);viewHand.add(item);viewHand.userData.heldModel=item}
 document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
-function look(dx,dy){yaw-=dx*.0024;pitch=clamp(pitch-dy*.0019,-.72,.72)}
-renderer.domElement.addEventListener('mousedown',e=>{if(e.button===0){if(!locked){dragLook=true;lastMouseX=e.clientX;lastMouseY=e.clientY;renderer.domElement.requestPointerLock?.();say('הזז את העכבר כדי להסתכל')}else melee()}if(e.button===2){e.preventDefault();throwItem()}});document.addEventListener('mouseup',()=>dragLook=false);document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===renderer.domElement;dragLook=false;document.querySelector('#help').style.opacity=locked?'.25':'1'});
-document.addEventListener('mousemove',e=>{if(locked){look(e.movementX,e.movementY);return}if(dragLook){look(e.clientX-lastMouseX,e.clientY-lastMouseY);lastMouseX=e.clientX;lastMouseY=e.clientY}});document.addEventListener('contextmenu',e=>e.preventDefault());
+let firstLockedMove=false;
+function look(dx,dy,maxDelta){
+ if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.max(Math.abs(dx),Math.abs(dy))>maxDelta)return;
+ yaw=THREE.MathUtils.euclideanModulo(yaw-dx*.0024+Math.PI,2*Math.PI)-Math.PI;
+ pitch=clamp(pitch-dy*.0019,-.72,.72);
+}
+async function requestMouseLock(){
+ const canvas=renderer.domElement;
+ try{
+  await canvas.requestPointerLock?.({unadjustedMovement:true});
+ }catch(error){
+  if(error.name==='NotSupportedError'){
+   try{await canvas.requestPointerLock?.();}catch{/* Drag look remains available. */}
+  }
+ }
+}
+renderer.domElement.addEventListener('mousedown',e=>{
+ if(e.button===0){
+  if(locked)melee();
+  else{
+   dragLook=true;
+   lastMouseX=e.clientX;
+   lastMouseY=e.clientY;
+   requestMouseLock();
+   say('הזז את העכבר כדי להסתכל');
+  }
+ }
+ if(e.button===2){e.preventDefault();throwItem();}
+});
+document.addEventListener('mouseup',()=>dragLook=false);
+window.addEventListener('blur',()=>dragLook=false);
+document.addEventListener('pointerlockchange',()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+ firstLockedMove=locked;
+ dragLook=false;
+ document.querySelector('#help').style.opacity=locked?'.25':'1';
+});
+document.addEventListener('mousemove',e=>{
+ if(locked){
+  if(!e.movementX&&!e.movementY)return;
+  // The browser can report a cursor reposition as the first locked movement.
+  look(e.movementX,e.movementY,firstLockedMove?96:640);
+  firstLockedMove=false;
+ }else if(dragLook){
+  look(e.clientX-lastMouseX,e.clientY-lastMouseY,640);
+  lastMouseX=e.clientX;
+  lastMouseY=e.clientY;
+ }
+});
+document.addEventListener('contextmenu',e=>e.preventDefault());
 function say(message){notice.textContent=message;notice.style.opacity='1';clearTimeout(say.timer);say.timer=setTimeout(()=>notice.style.opacity='0',850)}
 function pickup(){if(player.held){say('כבר יש לך חפץ ביד');return}let nearest=null,d=4.8;for(const q of props)if(!q.taken){let n=q.mesh.position.distanceTo(player.g.position);if(n<d){nearest=q;d=n}}if(!nearest){say('התקרב לחפץ ולחץ E');return}nearest.taken=true;player.held=nearest.type;player.heldProp=nearest;player.g.add(nearest.mesh);nearest.mesh.position.set(.48,1.18,-.38);nearest.mesh.rotation.set(.3,.5,.5);setViewItem(player.held);heldText.textContent=`❤️ ${health}　|　${icon(player.held)} ביד`;say(`${icon(player.held)} נאסף!`)}
 function icon(t){return {cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
@@ -348,7 +395,7 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 19 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 19 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 20 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 20 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
