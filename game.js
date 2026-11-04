@@ -6,7 +6,7 @@ import {buildResort, parasol, lounger, sportsBall, resortRoutes} from './resort.
 import {makeOcean, waveHeight} from './ocean.js';
 import {addSeaLife, textureSand, sunsetSky, addWetSand} from './sea-life.js';
 import {connectPlayers} from './online.js';
-import {loadFirstPersonFists, punchDuration} from './first-person.js';
+import {loadFirstPersonFists, comboDuration} from './first-person.js';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
 const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,180);camera.position.set(0,2,0);scene.add(camera);
@@ -50,8 +50,12 @@ function pickup(){if(player.held){say('כבר יש לך חפץ ביד');return}l
 function icon(t){return {cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
 function melee(){
  if(!player.alive||player.cool>0)return;
- player.cool=punchDuration;
- if(firstPersonFists&&!player.held){firstPersonFists.punch(strike);return}
+ if(firstPersonFists&&!player.held){
+  player.cool=comboDuration;
+  firstPersonFists.punch(strike);
+  return;
+ }
+ player.cool=.38;
  punchT=1;
  strike();
 }
@@ -320,7 +324,7 @@ heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.
 // keep the shoreline animated
 }
 function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);camera.position.copy(player.g.position).add(new THREE.Vector3(0,1.68,0));camera.rotation.set(pitch,yaw,0);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 17 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 17 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 18 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.13;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 18 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
