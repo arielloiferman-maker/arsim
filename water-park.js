@@ -17,6 +17,19 @@ const dolphinLocations=[[-38,-56,.9],[16,-96,-.7],[-34,-167,1.1],[-102,-237,1.8]
  [95,-298,.5],[-163,-440,-1.2],[65,-538,.6],[202,-680,-.9],[-107,-795,.7],
  [-295,-430,.8],[330,-610,-.5],[-370,-851,1.1],[305,-850,-1.1]];
 const rampHalfLength=4,rampHalfWidth=2.3,rampRise=1.64;
+const rampWidthScale=1.65,rampLengthScale=1.75;
+const seaRoutes=Array.from({length:24},(_,i)=>[
+ (i%4-1.5)*720+Math.sin(i*2.1)*130,
+ -1110-Math.floor(i/4)*420,
+ Math.sin(i*.6)*.6,
+ 1.9+(i%3)*.3
+]);
+const freeHoops=Array.from({length:42},(_,i)=>[
+ (i%6-2.5)*470+Math.sin(i*1.7)*75,
+ -170-Math.floor(i/6)*450,
+ i%3===0?5:1.65,
+ Math.sin(i*.43)*.65
+]);
 
 export async function loadWaterPark(scene){
  const [ramp,spray,dolphin,buoy,jump,shark,fish,hoop]=await Promise.all(
@@ -25,27 +38,39 @@ export async function loadWaterPark(scene){
  const jumpClip=jump.animations[0];
  const jumpPitch=jumpClip.tracks[0].createInterpolant();
  const hoops=[];
- const ramps=rampLocations.map(([x,z,yaw,height=1])=>{
+ const markers=[];
+ const ramps=[...rampLocations,...seaRoutes].map(([x,z,yaw,height=1])=>{
   const model=ramp.scene.clone();
   model.position.set(x,0,z);
   model.rotation.y=yaw;
-  model.scale.y=height;
+  model.scale.set(rampWidthScale,height*1.3,rampLengthScale);
   scene.add(model);
   model.updateMatrixWorld(true);
   for(const side of [-1,1]){
    const marker=buoy.scene.clone();
    model.localToWorld(marker.position.set(side*3.8,0,4.5));
    scene.add(marker);
+   markers.push(marker);
   }
   if(height>1){
    const ring=hoop.scene.clone();
    model.localToWorld(ring.position.set(0,rampRise+1.55/height,-12));
    ring.rotation.y=yaw;
+   ring.scale.setScalar(1.3);
    scene.add(ring);
    hoops.push(ring);
   }
   return model;
  });
+ for(const [x,z,y,yaw] of freeHoops){
+  const ring=hoop.scene.clone();
+  ring.position.set(x,y,z);
+  ring.rotation.y=yaw;
+  ring.scale.setScalar(1.3);
+  scene.add(ring);
+  hoops.push(ring);
+ }
+ const scenery=[...ramps,...markers,...hoops];
  function swimmer(asset,x,z,yaw,phase,scale=1,splash=false){
   const model=asset.scene.clone();
   model.position.set(x,0,z);
@@ -58,7 +83,8 @@ export async function loadWaterPark(scene){
   return {model,mixer,splash,body:model.children[0],wasAbove:false};
  }
  const animals=[];
- dolphinLocations.forEach(([x,z,yaw],i)=>{
+ const wildlifeLocations=[...dolphinLocations,...seaRoutes.map(([x,z,yaw])=>[x+28,z-15,yaw])];
+ wildlifeLocations.forEach(([x,z,yaw],i)=>{
   animals.push(swimmer(dolphin,x,z,yaw,i*.47,1,true));
   if(i%2===0)animals.push(swimmer(shark,x+16,z-12,yaw-.85,i*.68,1.05,true));
   for(let j=0;j<4;j++){
@@ -87,7 +113,11 @@ export async function loadWaterPark(scene){
     model.worldToLocal(after.set(ski.position.x,0,ski.position.z));
     if(Math.abs(after.x)>rampHalfWidth)continue;
     if(after.z>=-rampHalfLength&&after.z<=rampHalfLength){
-     return {height:(.04+(rampHalfLength-after.z)*.2)*model.scale.y,launch:false};
+     return {
+      height:(.04+(rampHalfLength-after.z)*.2)*model.scale.y,
+      tilt:Math.atan(.2*model.scale.y/model.scale.z),
+      launch:false
+     };
     }
     if(after.z< -rampHalfLength&&before.z>=-rampHalfLength&&before.z<=rampHalfLength
       &&Math.abs(before.x)<=rampHalfWidth)return {height:rampRise*model.scale.y,launch:true};
@@ -121,6 +151,9 @@ export async function loadWaterPark(scene){
    plume.mixer.update(0);
   },
   update(dt,viewer){
+   for(const model of scenery){
+    model.visible=model.position.distanceToSquared(viewer)<180**2;
+   }
    for(const animal of animals){
     const {model,mixer,body,splash}=animal;
     model.visible=model.position.distanceToSquared(viewer)<140**2;

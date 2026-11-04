@@ -286,6 +286,7 @@ function updateJetSkis(dt){
   const crest=waveHeight(ski.position.x,ski.position.z,time);
   const ramp=ride.lift===0?waterPark?.rampAt(ski,x,z):null;
   ride.rampHeight=ramp&&!ramp.launch?ramp.height:0;
+  ride.rampTilt=ramp?.tilt??0;
   if(ride.lift===0&&ride.travelSpeed>4&&ride.jumpRequested){
    const waterY=ski.userData.waterY??.25+crest;
    ride.lift=ramp?Math.max(.01,.25+ramp.height-waterY):.01;
@@ -316,10 +317,10 @@ function updateJetSkis(dt){
    ride.sprayTime-=dt;
    if(ride.sprayTime<=0){
     ski.localToWorld(exhaustPoint.set(0,-.019,1.582));
-    const scale=clamp(.66+ride.travelSpeed*.016,.75,1.6);
+    const scale=clamp(.95+ride.travelSpeed*.016,1,2.05);
     const stretch=1+Math.min(ride.travelSpeed,200)*.04;
     waterPark?.spray(exhaustPoint.x,exhaustPoint.y,exhaustPoint.z,ski.rotation.y,scale,false,stretch);
-    ride.sprayTime=.15-Math.min(ride.travelSpeed,55.6)*.0012;
+    ride.sprayTime=.12-Math.min(ride.travelSpeed,70)*.00075;
    }
   }
   wakePower=ride.lift>0||ramp?0:Math.min(1,ride.travelSpeed/9);
@@ -338,7 +339,7 @@ function updateJetSkis(dt){
   ski.userData.waterY=THREE.MathUtils.damp(ski.userData.waterY??waterY,waterY,9,dt);
   const deckY=ridden&&skiRide.rampHeight>0?.25+skiRide.rampHeight:0;
   ski.position.y=Math.max(ski.userData.waterY,deckY)+airborne;
-  if(ridden&&airborne>0&&waterPark){
+  if(ridden&&waterPark){
    beforeHoop.y+=.65;
    afterHoop.copy(ski.position);
    afterHoop.y+=.65;
@@ -346,7 +347,7 @@ function updateJetSkis(dt){
   }
   const dx=-Math.sin(ski.rotation.y),dz=-Math.cos(ski.rotation.y);
   const slope=waveHeight(x+dx,z+dz,time)-waveHeight(x-dx,z-dz,time);
-  let tilt=ridden&&skiRide.rampHeight>0?Math.atan(.2):slope*.45;
+  let tilt=ridden&&skiRide.rampHeight>0?skiRide.rampTilt:slope*.45;
   if(airborne>0){
    tilt=skiRide.verticalSpeed*.045;
    if(skiRide.flightDuration&&waterPark)tilt=waterPark.jumpPitch(skiRide.flightTime/skiRide.flightDuration);
@@ -527,8 +528,8 @@ if(p.stun>0){p.walking=false;continue}const enemies=inArena?people.filter(q=>q.t
 heldText.textContent=`❤️ ${Math.max(0,Math.ceil(player.hp))}　|　${player.held?icon(player.held)+' ביד':'🧺 אין חפץ'}`;
 // keep the shoreline animated
 }
-function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 29 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 29 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+function frame(){requestAnimationFrame(frame);const rawDt=clock.getDelta();adaptResolution(rawDt);let dt=Math.min(rawDt,.04);update(dt);updateCamera();ocean.follow(camera.position.x,camera.position.z);const underwater=camera.position.y<-.13;sky.visible=!underwater;if(underwater)scene.background.setHex(0x276d7c);else scene.background.setRGB(...blenderLook.worldColor);scene.fog.color.copy(scene.background);scene.fog.near=underwater?1:48;scene.fog.far=underwater?19:115;sky.position.copy(camera.position);renderer.render(scene,camera)}frame();
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 30 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 30 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
 loadWaterPark(scene).then(park=>{waterPark=park;renderer.shadowMap.needsUpdate=true}).catch(error=>console.warn('Could not load water park:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
