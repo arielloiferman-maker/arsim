@@ -6,6 +6,13 @@ import terrain from './terrain.blend.glb';
 import riptide from './riptide.glb';
 
 const templates=new Map();
+function sharpenTextures(mesh){
+ for(const material of [].concat(mesh.material)){
+  for(const texture of [material.map,material.normalMap,material.roughnessMap]){
+   if(texture)texture.anisotropy=8;
+  }
+ }
+}
 export function blenderProp(type){
  const template=templates.get(type);
  return template?.clone(true);
@@ -21,7 +28,10 @@ export async function installBlenderWorld(scene,resort,props){
  ]);
  const marked=[];
  town.scene.traverse(node=>{
-  if(node.isMesh)node.castShadow=node.receiveShadow=true;
+  if(node.isMesh){
+   node.castShadow=node.receiveShadow=true;
+   sharpenTextures(node);
+  }
   const match=/^PROP_([a-z]+)/i.exec(node.name);
   if(match)marked.push([node,match[1].toLowerCase()]);
  });
@@ -36,8 +46,7 @@ export async function installBlenderWorld(scene,resort,props){
  shore.scene.traverse(node=>{
   if(!node.isMesh)return;
   node.receiveShadow=true;
-  if(node.material.map)node.material.map.anisotropy=4;
-  if(node.material.normalMap)node.material.normalMap.anisotropy=4;
+  sharpenTextures(node);
  });
  scene.add(town.scene,seaLife.scene,shore.scene);
  town.scene.updateMatrixWorld(true);
@@ -71,7 +80,11 @@ export async function installBlenderWorld(scene,resort,props){
    // The exported bow points toward +Z. Vehicles steer and accelerate toward -Z.
    model.rotation.y=Math.PI;
    model.position.y=-.25;
-   model.traverse(part=>{if(part.isMesh)part.receiveShadow=true;});
+   model.traverse(part=>{
+    if(!part.isMesh)return;
+    part.receiveShadow=true;
+    sharpenTextures(part);
+   });
    vehicle.clear();
    vehicle.scale.setScalar(1);
    vehicle.add(model);
