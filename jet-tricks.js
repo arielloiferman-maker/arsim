@@ -24,12 +24,12 @@ export function poseJetTrick(pivot,id,progress){
  pivot.rotation.set(pitch*rotation,yaw*rotation,roll*rotation+lean*Math.sin(t*Math.PI),'YXZ');
 }
 
-export function installTrickMenu({clearControls,resume,notify}){
+export function installTrickMenu({clearControls,resume,choose}){
  const panel=document.createElement('dialog');
  panel.id='jet-tricks';
  panel.setAttribute('aria-label','טריקים לג׳ט סקי');
  panel.innerHTML=`<header><h2>טריקים לג׳ט סקי</h2><button data-close>סגירה · H</button></header>
- <p>בחר תרגיל, ואז קפוץ עם רווח או קליק ימני.</p><div class="trick-grid">
+ <p>בחר תרגיל בזמן רכיבה כדי לבצע אותו. אפשר גם לחזור על הטריק הנבחר עם רווח או קליק ימני.</p><div class="trick-grid">
  ${tricks.map(([id,label])=>`<button data-trick="${id}" aria-pressed="${id==='none'}">${label}</button>`).join('')}
  </div>`;
  const style=document.createElement('style');
@@ -58,7 +58,7 @@ export function installTrickMenu({clearControls,resume,notify}){
   const {trick}=button.dataset;
   selected=trick==='none'?null:trick;
   for(const option of buttons)option.setAttribute('aria-pressed',String(option===button));
-  notify(selected?'לקפיצה הבאה · '+byId.get(selected)[1]:'קפיצה רגילה');
+  choose(selected,byId.get(trick)[1]);
   close();
  };
  window.addEventListener('keydown',event=>{
