@@ -58,7 +58,7 @@ export function poseRider(player,ride){
    sides.flatMap(({arm,leg})=>[...arm,...leg]).map(joint=>[joint,joint.quaternion.clone()])};
   character.rider=pose;
  }
- const {steering,bench}=ride;
+ const {steering,bench,snow,board}=ride;
  const mesh=ride.visual??ride.mesh;
  if(root.parent!==mesh)mesh.add(root);
  for(const [bone,rest] of pose.joints)bone.quaternion.copy(rest);
@@ -67,22 +67,24 @@ export function poseRider(player,ride){
  const jumpFlex=Math.sin(progress*Math.PI);
  const compression=ride.landingCompression??0;
  const lean=bench?.08:.32+Math.min(.1,(ride.travelSpeed??0)*.001)+jumpFlex*.07+compression*.05;
- root.rotation.set(lean,Math.PI+steer*.55,0,'YXZ');
+ root.rotation.set(snow?.24:lean,snow&&board?Math.PI/2:Math.PI+steer*.55,0,'YXZ');
  root.position.set(0,0,0);
  pose.pelvis.getWorldPosition(hip);
  mesh.worldToLocal(hip);
- seat.set(0,bench?.65:.72+jumpFlex*.09-compression*.13,bench?0:.15);
+ seat.set(0,snow?.89+jumpFlex*.07:bench?.65:.72+jumpFlex*.09-compression*.13,bench||snow?0:.15);
  root.position.copy(seat.sub(hip));
  mesh.getWorldQuaternion(tilt);
  for(const [index,{arm,leg}] of pose.sides.entries()){
   const side=index===0?1:-1;
-  mesh.localToWorld(target.set(side*(bench?.17:.35),bench?.12:.43+jumpFlex*.025,bench?-.36:.34));
+  if(snow)mesh.localToWorld(target.set(side*(board?.06:.21),.14,board?side*.29:.09));
+  else mesh.localToWorld(target.set(side*(bench?.17:.35),bench?.12:.43+jumpFlex*.025,bench?-.36:.34));
   bendDirection.set(side*.22,.22,-1).applyQuaternion(tilt);
   poseLimb(leg,target,bendDirection);
   leg[2].getWorldPosition(target).add(bendDirection.set(0,-.24,-1).applyQuaternion(tilt));
   aim(leg[2],target);
   const grip=steering?.getObjectByName('RiptideGrip_'+(index===0?'port':'starboard'));
   if(grip)grip.localToWorld(target.set(-side*.015,.025,-.065));
+  else if(snow)mesh.localToWorld(target.set(side*.42,.97,-.26));
   else if(bench)mesh.localToWorld(target.set(side*.19,.68,-.27));
   else mesh.localToWorld(target.set(side*.34,.89,-.23));
   bendDirection.set(side*.8,-1,.15).applyQuaternion(tilt);

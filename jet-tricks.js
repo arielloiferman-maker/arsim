@@ -27,8 +27,8 @@ export function poseJetTrick(pivot,id,progress){
 export function installTrickMenu({clearControls,resume,choose}){
  const panel=document.createElement('dialog');
  panel.id='jet-tricks';
- panel.setAttribute('aria-label','טריקים לג׳ט סקי');
- panel.innerHTML=`<header><h2>טריקים לג׳ט סקי</h2><button data-close>סגירה · H</button></header>
+ panel.setAttribute('aria-label','תפריט טריקים');
+ panel.innerHTML=`<header><h2>טריקים באוויר</h2><button data-close>סגירה · H</button></header>
  <p>בחר תרגיל בזמן רכיבה כדי לבצע אותו. אפשר גם לחזור על הטריק הנבחר עם רווח או קליק ימני.</p><div class="trick-grid">
  ${tricks.map(([id,label])=>`<button data-trick="${id}" aria-pressed="${id==='none'}">${label}</button>`).join('')}
  </div>`;

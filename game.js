@@ -12,11 +12,12 @@ import {poseRider} from './rider.js';
 import {installInventory} from './inventory.js';
 import {renderPhoto} from './photo-render.js';
 import {installTrickMenu,poseJetTrick} from './jet-tricks.js';
+import {loadSnowResort,snowHeight} from './snow-resort.js';
 import {loadCoastalWildlife} from './coastal-wildlife.js';
 import {loadFirstPersonFists, comboDuration} from './first-person.js';
 
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x7ed3ee);scene.fog=new THREE.Fog(0x7ed3ee,48,115);
-const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,260);camera.position.set(0,2,0);scene.add(camera);
+const camera=new THREE.PerspectiveCamera(74,innerWidth/innerHeight,.1,650);camera.position.set(0,2,0);scene.add(camera);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.shadowMap.enabled=true;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=2**blenderLook.exposure;document.querySelector('#game').appendChild(renderer.domElement);
 scene.add(new THREE.HemisphereLight(new THREE.Color(...blenderLook.worldColor),0xa47445,blenderLook.worldStrength*2.4));const sun=new THREE.DirectionalLight(new THREE.Color(...seaSunColor),blenderLook.sunEnergy);sun.position.set(...seaSunDirection).multiplyScalar(42);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-43;sun.shadow.camera.right=43;sun.shadow.camera.top=38;sun.shadow.camera.bottom=-38;sun.shadow.normalBias=.035;scene.add(sun);const resort={layout:null,pickups:[],jetSkis:[],slides:resortRoutes()};
 const mat=(c,r=.85,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});const sand=mat(0xe8c887),water=new THREE.MeshPhysicalMaterial({color:0x159dc4,roughness:.14,metalness:.1,transparent:true,opacity:.86}),foam=mat(0xd8fbf2),red=mat(0xe8733d),navy=mat(0x263849),white=mat(0xf3f0dc),black=mat(0x22252c),skin=mat(0xd6a478),darkSkin=mat(0x956344),plastic=mat(0xf4d748,.45),pink=mat(0xff65a5),glass=new THREE.MeshPhysicalMaterial({color:0x4dc4a1,roughness:.05,transparent:true,opacity:.72}),wood=mat(0xc69656);
@@ -61,7 +62,7 @@ let yaw=0,pitch=0,health=100,blueScore=0,blackScore=0,keys={},locked=false,dragL
 const viewHand=new THREE.Group();const forearm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.48,5,8),skin),palm=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),skin);forearm.rotation.z=.62;forearm.position.set(.55,-.47,-.82);palm.position.set(.76,-.72,-.92);viewHand.add(forearm,palm);
 for(let i=0;i<4;i++){const knuckle=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),skin);knuckle.position.set(.66+i*.065,-.78,-1.02);viewHand.add(knuckle)}const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(.045,.13,4,7),skin);thumb.position.set(.88,-.73,-.96);thumb.rotation.z=-.8;viewHand.add(thumb);viewHand.visible=true;camera.add(viewHand);
 const leftHand=new THREE.Group(),leftArm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.48,5,8),skin),leftPalm=new THREE.Mesh(new THREE.SphereGeometry(.14,12,10),skin);leftArm.rotation.z=-.62;leftArm.position.set(-.48,-.49,-.82);leftPalm.position.set(-.68,-.73,-.94);leftHand.add(leftArm,leftPalm);for(let i=0;i<4;i++){const knuckle=new THREE.Mesh(new THREE.SphereGeometry(.045,8,6),skin);knuckle.position.set(-.58-i*.065,-.79,-1.03);leftHand.add(knuckle)}const leftThumb=new THREE.Mesh(new THREE.CapsuleGeometry(.045,.13,4,7),skin);leftThumb.position.set(-.82,-.74,-.98);leftThumb.rotation.z=.8;leftHand.add(leftThumb);camera.add(leftHand);
-let firstPersonFists=null,thirdPerson=false,waterPark=null;
+let firstPersonFists=null,thirdPerson=false,waterPark=null,snowResort=null;
 const viewItem=new THREE.Group();
 camera.add(viewItem);
 function setViewItem(type){
@@ -97,10 +98,11 @@ const trickMenu=installTrickMenu({
  resume(){requestMouseLock();},
  choose(trick,label){
   if(skiRide)skiRide.requestedTrick=trick;
-  say(trick&&!skiRide?'נבחר לרכיבה הבאה · '+label:label);
+  snowResort?.choose(trick);
+  say(trick&&!skiRide&&!snowResort?.ride?'נבחר לרכיבה הבאה · '+label:label);
  }
 });
-document.addEventListener('keydown',e=>{keys[e.code]=true;if(inventory.cameraActive&&['Space','KeyF','KeyG','KeyE'].includes(e.code))return;if(e.code==='KeyV'&&!e.repeat){thirdPerson=!thirdPerson;return}if(skiRide&&rideModes[e.code]&&!e.repeat){skiRide.mode=rideModes[e.code];return}if(e.code==='KeyB'&&!e.repeat){toggleShop();return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide())pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(inventory.cameraActive&&['Space','KeyF','KeyG','KeyE'].includes(e.code))return;if(e.code==='KeyV'&&!e.repeat){thirdPerson=!thirdPerson;return}if(skiRide&&rideModes[e.code]&&!e.repeat){skiRide.mode=rideModes[e.code];return}if(e.code==='KeyB'&&!e.repeat){if(!player.alive||snowResort?.shop(player.g.position))return;toggleShop();return}if(snowResort?.shopOpen&&/^Digit[12]$/.test(e.code)&&!e.repeat){snowResort.buy(Number(e.code.slice(-1))-1);return}if(shopOpen&&/^Digit[1-4]$/.test(e.code)&&!e.repeat){buy(Number(e.code.slice(-1))-1);return}if(e.code==='KeyE'&&!e.repeat&&!useJetSki()&&!boardSlide()&&!(player.alive&&snowResort?.interact(player.g.position)))pickup();if(e.code==='KeyF')throwItem();if(e.code==='KeyG'&&!e.repeat)throwSand();if(e.code==='Space'){e.preventDefault();if(!e.repeat){if(skiRide)skiRide.jumpRequested=true;else if(snowResort?.travelling)snowResort.jump();else if(!slideRide&&player.g.position.z>=-19)melee()}}});document.addEventListener('keyup',e=>keys[e.code]=false);
 let firstLockedMove=false;
 const ridePitchMin=-.62,ridePitchMax=.22;
 function look(dx,dy,maxDelta){
@@ -131,7 +133,7 @@ renderer.domElement.addEventListener('mousedown',e=>{
    say('הזז את העכבר כדי להסתכל');
   }
  }
- if(e.button===2){e.preventDefault();if(skiRide)skiRide.jumpRequested=true;else throwItem();}
+ if(e.button===2){e.preventDefault();if(skiRide)skiRide.jumpRequested=true;else if(snowResort?.travelling)snowResort.jump();else throwItem();}
 });
 document.addEventListener('mouseup',()=>dragLook=false);
 window.addEventListener('blur',()=>dragLook=false);
@@ -158,7 +160,7 @@ function say(message){notice.textContent=message;notice.style.opacity='1';clearT
 function pickup(){if(player.held){say('כבר יש לך חפץ ביד');return}let nearest=null,d=4.8;for(const q of props)if(!q.taken){let n=q.mesh.position.distanceTo(player.g.position);if(n<d){nearest=q;d=n}}if(!nearest){say('התקרב לחפץ ולחץ E');return}nearest.taken=true;player.held=nearest.type;player.heldProp=nearest;player.g.add(nearest.mesh);nearest.mesh.position.set(.48,1.18,-.38);nearest.mesh.rotation.set(.3,.5,.5);setViewItem(player.held);heldText.textContent=`❤️ ${health}　|　${icon(player.held)} ביד`;say(`${icon(player.held)} נאסף!`)}
 function icon(t){return {beer:'🍺',cup:'🥤',bottle:'🍾',ball:'🏐',beachball:'🏖️',volley:'🏐',paddle:'🏓',blanket:'🟦',chair:'🪑',lid:'🧺',umbrella:'⛱️'}[t]||'🧺'}
 function melee(){
- if(skiRide||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
+ if(skiRide||snowResort?.travelling||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
  if(firstPersonFists&&!player.held){
   player.cool=comboDuration;
   firstPersonFists.punch(strike);
@@ -173,7 +175,7 @@ function strike(){if(insideBeerShop(player.g.position))return;const v=new THREE.
 const grainGeometry=new THREE.SphereGeometry(.06,5,4);
 const grainMaterial=mat(0xf1d497);
 function throwSand(){
- if(skiRide||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
+ if(skiRide||snowResort?.travelling||!player.alive||player.cool>0||insideBeerShop(player.g.position))return;
  player.cool=.55;
  punchT=.8;
  const direction=camera.getWorldDirection(new THREE.Vector3());
@@ -207,7 +209,7 @@ function hitWithSand(particle){
  return false;
 }
 function emitImpact(position,color=0xf2d38a,count=15){for(let i=0;i<count;i++){const particle=new THREE.Mesh(new THREE.SphereGeometry(.045+Math.random()*.055,6,5),mat(color,.72));particle.position.copy(position);scene.add(particle);visualParticles.push({mesh:particle,velocity:new THREE.Vector3((Math.random()-.5)*5,Math.random()*4,(Math.random()-.5)*5),life:.25+Math.random()*.32})}}
-function throwItem(){if(skiRide||insideBeerShop(player.g.position))return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.visible=true;obj.position.copy(attackOrigin()).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
+function throwItem(){if(skiRide||snowResort?.travelling||insideBeerShop(player.g.position))return;if(!player.held){say('אסוף חפץ עם E');return}const type=player.held,obj=player.heldProp.mesh;player.g.remove(obj);const dir=new THREE.Vector3();camera.getWorldDirection(dir);obj.visible=true;obj.position.copy(attackOrigin()).addScaledVector(dir,.9);obj.rotation.set(0,0,0);scene.add(obj);const speed=['chair','umbrella'].includes(type)?12.5:16;thrownObjects.push({mesh:obj,type,velocity:dir.multiplyScalar(speed),previous:obj.position.clone(),bounces:0,hit:false,damage:type==='umbrella'?45:type==='paddle'?38:36});player.held=null;player.heldProp=null;setViewItem(null);heldText.textContent=`❤️ ${health}　|　🧺 אין חפץ`;punchT=.8;say(`${icon(type)} נזרק!`)}
 function damage(p,n,from,attacker){
  if(!p.alive||insideBeerShop(p.g.position)||(attacker&&insideBeerShop(attacker.g.position)))return false;
  if(p.bot&&attacker===player){
@@ -457,7 +459,7 @@ function boardSlide(){
 }
 function updateTraversal(move,dt){
  updateJetSkis(dt);
- if(skiRide)return;
+ if(skiRide||snowResort?.step(dt,player.g.position,keys,trickMenu.selected,player.alive))return;
  if(slideRide){
   const ride=slideRide;
   ride.progress=Math.min(1,ride.progress+dt*(.22+ride.progress*.24));
@@ -485,7 +487,7 @@ function updateTraversal(move,dt){
   pos.y=clamp(pos.y,-depth,0);
   return;
  }
- let floor=0;
+ let floor=snowResort?snowHeight(pos):0;
  for(const slide of resort.slides){
   const onStairs=Math.abs(pos.x-(slide.x-1.5))<.65&&pos.z<=slide.z+6.1&&pos.z>=slide.z-.25;
   if(onStairs)floor=Math.max(floor,clamp(slide.z+6-pos.z,0,6)*.91);
@@ -549,7 +551,7 @@ function attackOrigin(){
  eye.y+=1.68;
  return eye;
 }
-function externalView(){return thirdPerson||Boolean(skiRide?.activeTrick);}
+function externalView(){return thirdPerson||Boolean(skiRide?.activeTrick||snowResort?.ride);}
 function updateCamera(){
  if(skiRide){
   const ski=skiRide.mesh;
@@ -558,7 +560,7 @@ function updateCamera(){
   camera.rotation.set(ridePitch,yaw,ski.rotation.z*.65);
  }else{
   camera.position.copy(player.g.position);
-  camera.position.y+=1.68;
+  camera.position.y+=snowResort?.liftRiding?1.38:1.68;
   camera.rotation.set(pitch,yaw,0);
  }
  if(externalView()&&!inventory.cameraActive){
@@ -569,7 +571,7 @@ function updateCamera(){
  }
 }
 camera.rotation.order='YXZ';
-const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+(skiRide?.mesh.rotation.y??yaw);updateCamera();const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving&&!skiRide;
+const clock=new THREE.Clock();function update(dt){player.cool=Math.max(0,player.cool-dt);punchT=Math.max(0,punchT-dt*5.2);player.g.rotation.y=Math.PI+(skiRide?.mesh.rotation.y??yaw);updateCamera();const moving=keys[controls.forward]||keys[controls.back]||keys[controls.left]||keys[controls.right];player.walking=moving&&!skiRide&&!snowResort?.travelling;
 if(player.character){
  const {root}=player.character;
  root.visible=externalView()&&!inventory.cameraActive;
@@ -585,7 +587,7 @@ camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.set(1,0,
 waterPark?.update(dt,player.g.position,inventory.viewDistance);
 updateWildlife?.(dt,player.g.position,inventory.viewDistance);
 firstPersonFists?.ride(externalView()||inventory.cameraActive?null:skiRide?.steering??null);
-poseRider(player,externalView()&&!inventory.cameraActive&&player.alive?skiRide:null);
+poseRider(player,externalView()&&!inventory.cameraActive&&player.alive?(skiRide??snowResort?.ride):null);
 updateOnline(dt);
 for(const person of people){
  if(person.hitT>0){
@@ -681,15 +683,22 @@ function frame(){
  if(underwater)scene.background.setHex(0x0c3b68);
  else scene.background.setRGB(...seaHorizon);
  scene.fog.color.copy(scene.background);
- scene.fog.near=underwater?1:inventory.viewDistance*.4;
- scene.fog.far=underwater?28:inventory.viewDistance-10;
+ const landView=snowResort&&z>oceanBounds.shoreZ&&!inventory.cameraActive;
+ scene.fog.near=underwater?1:landView?130:inventory.viewDistance*.4;
+ scene.fog.far=underwater?28:landView?530:inventory.viewDistance-10;
  sky.position.copy(camera.position);
  renderer.render(scene,camera);
  inventory.afterRender();
 }
 frame();
-installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 37 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 37 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
+installBlenderWorld(scene,resort,props).then(tick=>{document.querySelector("#build-status").textContent="גרסה 38 · חוף וטקסטורות Blender נטענו";blenderSea=tick;scene.remove(fallbackSea,fallbackWetSand,seabed);plane.position.y=-.25;renderer.shadowMap.needsUpdate=true}).catch(error=>{console.warn('Could not load Blender world:',error);document.querySelector('#build-status').textContent='גרסה 38 · טעינת Blender נכשלה (מפה חלופית)';Object.assign(resort,buildResort(scene));for(const prop of resort.pickups)props.push({...prop,taken:false});renderer.shadowMap.needsUpdate=true});
 loadFirstPersonFists(camera).then(fists=>{firstPersonFists=fists}).catch(error=>console.warn('Could not load Blender fists:',error));
+loadSnowResort(scene,{
+ notify:say,credits:()=>credits,
+ spend(price){if(credits<price)return false;credits-=price;return true;},
+ heading(angle){yaw=angle;pitch=-.12;}
+}).then(resort=>{snowResort=resort;renderer.shadowMap.needsUpdate=true;})
+ .catch(error=>console.warn('Could not load snow resort:',error));
 loadWaterPark(scene).then(park=>{waterPark=park;renderer.shadowMap.needsUpdate=true}).catch(error=>console.warn('Could not load water park:',error));
 loadCrew().then(()=>people.forEach(attachCrew)).catch(error=>console.warn('Could not load Blender crew:',error));
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
