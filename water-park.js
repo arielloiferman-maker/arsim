@@ -8,6 +8,7 @@ import jumpAsset from './water-jump.glb';
 import sharkAsset from './water-shark.glb';
 import fishAsset from './water-fish.glb';
 import hoopAsset from './water-hoop.glb';
+import arenaAsset from './indoor-arena.glb';
 
 const rampLocations=[[-28,-48,.25],[22,-78,-.28],[0,-160,0],[-95,-235,.2],
  [108,-310,-.32],[-180,-448,.35],[55,-555,-.15],[230,-690,-.42],[-125,-810,.25],
@@ -18,6 +19,10 @@ const dolphinLocations=[[-38,-56,.9],[16,-96,-.7],[-34,-167,1.1],[-102,-237,1.8]
  [-295,-430,.8],[330,-610,-.5],[-370,-851,1.1],[305,-850,-1.1]];
 const rampHalfLength=4,rampHalfWidth=2.3,rampRise=1.64;
 const rampWidthScale=1.65,rampLengthScale=1.75;
+const arenaLocations=[[2,-58,0],[50,-122,-.18],[-70,-245,.2],[105,-523,.25],
+ [-260,-1140,-.2],[480,-1870,.16],[-690,-2880,.24]];
+const launchDeck=[[-7.2,.035],[-5.8,.052],[-4.8,.14],[-3.9,.39],[-3.12,.77],[-2.48,1.23],[-1.91,1.70]];
+const landingDeck=[[2.22,1.45],[2.86,1.14],[3.6,.80],[4.53,.45],[5.61,.20],[6.67,.07],[7.55,.035]];
 const seaRoutes=Array.from({length:24},(_,i)=>[
  (i%4-1.5)*720+Math.sin(i*2.1)*130,
  -1110-Math.floor(i/4)*420,
@@ -38,8 +43,8 @@ const dolphinWaters=Array.from({length:169},(_,i)=>[
 ]);
 
 export async function loadWaterPark(scene){
- const [ramp,spray,dolphin,buoy,jump,shark,fish,hoop]=await Promise.all(
-  [rampAsset,sprayAsset,dolphinAsset,buoyAsset,jumpAsset,sharkAsset,fishAsset,hoopAsset].map(loadModel)
+ const [ramp,spray,dolphin,buoy,jump,shark,fish,hoop,arena]=await Promise.all(
+  [rampAsset,sprayAsset,dolphinAsset,buoyAsset,jumpAsset,sharkAsset,fishAsset,hoopAsset,arenaAsset].map(loadModel)
  );
  const jumpClip=jump.animations[0];
  const jumpPitch=jumpClip.tracks[0].createInterpolant();
@@ -82,7 +87,16 @@ export async function loadWaterPark(scene){
   scene.add(ring);
   hoops.push(ring);
  }
- const scenery=[...ramps,...markers,...hoops];
+ const arenas=arenaLocations.map(([x,z,yaw])=>{
+  const model=arena.scene.clone();
+  model.position.set(x,0,z);
+  model.rotation.y=yaw;
+  model.scale.set(1.25,1.1,2.2);
+  scene.add(model);
+  model.updateMatrixWorld(true);
+  return model;
+ });
+ const scenery=[...ramps,...markers,...hoops,...arenas];
  function swimmer(asset,x,z,yaw,phase,scale=1,splash=false){
   const model=asset.scene.clone();
   model.position.set(x,0,z);
@@ -128,6 +142,16 @@ export async function loadWaterPark(scene){
   return {model,mixer,actions,duration,remaining:0};
  });
  const before=new THREE.Vector3(),after=new THREE.Vector3(),splashPoint=new THREE.Vector3();
+ function sampleDeck(model,along,profile){
+  for(let i=1;i<profile.length;i++){
+   const [start,low]=profile[i-1], [end,high]=profile[i];
+   if(along<start||along>end)continue;
+   const slope=(high-low)/(end-start);
+   return {height:(low+(along-start)*slope)*model.scale.y,
+    tilt:Math.atan(slope*model.scale.y/model.scale.z),launch:false};
+  }
+  return null;
+ }
  let next=0;
  return {
   jumpPitch(progress){
@@ -135,6 +159,17 @@ export async function loadWaterPark(scene){
    return 2*Math.atan2(quaternion[0],quaternion[3]);
   },
   rampAt(ski,previousX,previousZ){
+   for(const model of arenas){
+    model.worldToLocal(after.set(ski.position.x,0,ski.position.z));
+    if(Math.abs(after.x)>1.9)continue;
+    const along=-after.z;
+    const deck=sampleDeck(model,along,launchDeck)??sampleDeck(model,along,landingDeck);
+    if(deck)return deck;
+    model.worldToLocal(before.set(previousX,0,previousZ));
+    if(along> -1.91&&-before.z<= -1.91&&-before.z>=-7.2&&Math.abs(before.x)<=1.9){
+     return {height:1.7*model.scale.y,launch:true};
+    }
+   }
    for(const model of ramps){
     model.worldToLocal(before.set(previousX,0,previousZ));
     model.worldToLocal(after.set(ski.position.x,0,ski.position.z));
@@ -148,6 +183,15 @@ export async function loadWaterPark(scene){
     }
     if(after.z< -rampHalfLength&&before.z>=-rampHalfLength&&before.z<=rampHalfLength
       &&Math.abs(before.x)<=rampHalfWidth)return {height:rampRise*model.scale.y,launch:true};
+   }
+   return null;
+  },
+  landingAt(ski){
+   for(const model of arenas){
+    model.worldToLocal(after.set(ski.position.x,0,ski.position.z));
+    if(Math.abs(after.x)>1.9)continue;
+    const deck=sampleDeck(model,-after.z,landingDeck);
+    if(deck)return deck;
    }
    return null;
   },

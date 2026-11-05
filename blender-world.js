@@ -96,6 +96,10 @@ export async function installBlenderWorld(scene,resort,props){
    scene.attach(vehicle);
    ski.removeFromParent();
   }
+  const trickPivot=new THREE.Group();
+  trickPivot.name='RiptideTrickPivot';
+  trickPivot.add(...vehicle.children);
+  vehicle.add(trickPivot);
   resort.jetSkis[i]=vehicle;
  }
  const mixer=new THREE.AnimationMixer(seaLife.scene);

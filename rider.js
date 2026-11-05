@@ -58,7 +58,8 @@ export function poseRider(player,ride){
    sides.flatMap(({arm,leg})=>[...arm,...leg]).map(joint=>[joint,joint.quaternion.clone()])};
   character.rider=pose;
  }
- const {mesh,steering,bench}=ride;
+ const {steering,bench}=ride;
+ const mesh=ride.visual??ride.mesh;
  if(root.parent!==mesh)mesh.add(root);
  for(const [bone,rest] of pose.joints)bone.quaternion.copy(rest);
  const steer=steering?.rotation.y??0;
