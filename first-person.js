@@ -39,6 +39,17 @@ export async function loadFirstPersonFists(camera){
  const cameraTransform=cameras[0].matrixWorldInverse.clone();
  cameras[0].removeFromParent();
  const ridingArms=clone(model);
+ const gloveMaterials=new Map();
+ model.traverse(part=>{
+  if(!part.isMesh)return;
+  const replace=material=>{
+   if(!/^Skin/.test(material.name))return material;
+   const copy=material.clone();
+   gloveMaterials.set(copy,copy.color.clone());
+   return copy;
+  };
+  part.material=Array.isArray(part.material)?part.material.map(replace):replace(part.material);
+ });
  model.matrix.copy(cameraTransform);
  model.matrixAutoUpdate=false;
  for(const arms of [model,ridingArms]){
@@ -71,7 +82,16 @@ export async function loadFirstPersonFists(camera){
   mixer.update(0);
  }
  guard();
+ let glovesOn=false;
  return {
+  snowGloves(active){
+   if(glovesOn===active)return;
+   glovesOn=active;
+   for(const [material,color] of gloveMaterials){
+    if(active)material.color.setHex(0x293e61);
+    else material.color.copy(color);
+   }
+  },
   ride(steering){
    if(steering===ridingArms.parent)return;
    if(steering)gripHandlebars(ridingArms,steering);

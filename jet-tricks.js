@@ -28,7 +28,7 @@ export function installTrickMenu({clearControls,resume,choose}){
  const panel=document.createElement('dialog');
  panel.id='jet-tricks';
  panel.setAttribute('aria-label','תפריט טריקים');
- panel.innerHTML=`<header><h2>טריקים באוויר</h2><button data-close>סגירה · H</button></header>
+ panel.innerHTML=`<header><h2>טריקים באוויר</h2><button data-close>סגירה · Z / H</button></header>
  <p>בחר תרגיל בזמן רכיבה כדי לבצע אותו. אפשר גם לחזור על הטריק הנבחר עם רווח או קליק ימני.</p><div class="trick-grid">
  ${tricks.map(([id,label])=>`<button data-trick="${id}" aria-pressed="${id==='none'}">${label}</button>`).join('')}
  </div>`;
@@ -62,7 +62,7 @@ export function installTrickMenu({clearControls,resume,choose}){
   close();
  };
  window.addEventListener('keydown',event=>{
-  if(event.code==='KeyH'){
+  if(event.code==='KeyH'||event.code==='KeyZ'){
    event.preventDefault();
    event.stopImmediatePropagation();
    if(event.repeat)return;
